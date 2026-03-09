@@ -20,15 +20,18 @@ if (process.env.LINE_CHANNEL_ACCESS_TOKEN && process.env.LINE_CHANNEL_ACCESS_TOK
 const app = express();
 
 // Middleware
+// ⚠️ 重要：LINE middleware 需要讀取 raw body 驗證簽名
+// express.json() 不能套用到 /webhook，否則 stream 會被提前消耗
 if (client) {
   app.use('/webhook', line.middleware(config));
 } else {
   // 預覽模式：webhook 端點返回提示訊息
-  app.post('/webhook', (req, res) => {
+  app.post('/webhook', express.json(), (req, res) => {
     res.status(503).json({ error: 'LINE Bot 尚未設定，請參考設定指南完成設定' });
   });
 }
-app.use(express.json());
+// express.json() 只套用到 /api 路由，避免與 LINE webhook 衝突
+app.use('/api', express.json());
 
 // 靜態檔案服務（Web管理介面）
 app.use(express.static('public'));
@@ -73,18 +76,27 @@ async function handleMessage(event) {
   const studentName = parentPair.extractStudentName(userMessage);
   
   if (studentName) {
-    // 自動配對並記錄
+    // 自動配對並記錄（本地 JSON）
     parentPair.addPair(userId, studentName, userMessage);
-    
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('✅ 自動配對成功！');
-    console.log(`   學生姓名: ${studentName}`);
-    console.log(`   User ID: ${userId}`);
-    console.log(`   訊息內容: ${userMessage}`);
-    console.log('   已自動記錄，請執行以下指令查看所有配對：');
-    console.log('   node scripts/pair-parents.js');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    
+
+    // ✅ 同步更新 Google Sheets，讓通知系統能使用正確的 User ID
+    try {
+      await homeworkService.updateStudentLineId(studentName, userId);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('✅ 自動配對成功！Google Sheets 已更新！');
+      console.log(`   學生姓名: ${studentName}`);
+      console.log(`   User ID: ${userId}`);
+      console.log(`   訊息內容: ${userMessage}`);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } catch (err) {
+      console.warn('⚠️  Google Sheets 更新失敗，已保存到本地：', err.message);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('✅ 自動配對成功（本地記錄）');
+      console.log(`   學生姓名: ${studentName}`);
+      console.log(`   User ID: ${userId}`);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
+
     // 回覆家長確認
     await client.replyMessage(event.replyToken, {
       type: 'text',
@@ -448,6 +460,17 @@ app.post('/api/pair-userid', async (req, res) => {
   } catch (e) {
     // Sheets 更新失敗也回傳部分成功
     res.json({ success: true, message: `✅ 已配對到本機記錄，但 Google Sheets 更新失敗：${e.message}` });
+  }
+});
+
+// API: 主任登入驗證
+app.post('/api/director-login', (req, res) => {
+  const { password } = req.body;
+  const directorPassword = process.env.DIRECTOR_PASSWORD || 'tips2024';
+  if (password === directorPassword) {
+    res.json({ success: true });
+  } else {
+    res.status(401).json({ success: false, error: '密碼錯誤' });
   }
 });
 

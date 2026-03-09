@@ -7,11 +7,47 @@
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+
+    <!-- 老師登入遮罩 -->
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-card">
+            <img src="/logo.png" alt="英典教育" class="login-logo">
+            <h2>作業完成通知系統</h2>
+            <p class="login-subtitle">請選擇你的名字</p>
+            <div class="teacher-buttons">
+                <button class="teacher-btn" data-name="Doris">👩‍🏫 Doris</button>
+                <button class="teacher-btn" data-name="Peggy">👩‍🏫 Peggy</button>
+            </div>
+            <div class="director-section">
+                <button class="director-btn" id="directorLoginBtn">🔑 主任登入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主任密碼輸入 Modal -->
+    <div id="directorModal" class="director-modal" style="display:none">
+        <div class="director-modal-card">
+            <div class="director-modal-icon">🔑</div>
+            <h3>主任登入</h3>
+            <p>請輸入主任專屬密碼</p>
+            <input type="password" id="directorPassword" class="director-password-input" placeholder="輸入密碼...">
+            <div id="directorError" class="director-error" style="display:none">❌ 密碼錯誤，請再試一次</div>
+            <div class="director-modal-btns">
+                <button id="directorConfirm" class="btn btn-primary">✓ 確認登入</button>
+                <button id="directorCancel" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <!-- 標題區 -->
         <header class="header">
             <h1>📚 作業完成通知系統</h1>
             <p class="subtitle">記錄學生作業完成情況並自動通知家長</p>
+            <div class="teacher-badge" id="teacherBadge">
+                <span id="teacherBadgeText">👩‍🏫 載入中...</span>
+                <button id="switchTeacher" class="switch-btn">切換</button>
+            </div>
         </header>
 
         <!-- Tab 導覽 -->
@@ -51,10 +87,10 @@
                                 <input type="datetime-local" id="completedTime" name="completedTime">
                             </div>
 
-                            <div class="form-group">
+                            <div class="form-group" style="display:none">
                                 <label for="operator">操作人員</label>
                                 <input type="text" id="operator" name="operator"
-                                       placeholder="例如：工讀生A" autocomplete="off">
+                                       placeholder="例如：工讀生A" autocomplete="off" readonly>
                             </div>
                         </div>
 

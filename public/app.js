@@ -2,6 +2,104 @@
 // 作業完成通知系統 - 前端 JavaScript
 // =========================================
 
+// =========================================
+// 老師登入 (sessionStorage 點名機制)
+// =========================================
+var TEACHERS = ['Doris', 'Peggy'];
+var DIRECTOR_NAME = '主任';
+
+function getCurrentTeacher() {
+  return sessionStorage.getItem('currentTeacher');
+}
+
+function setCurrentTeacher(name) {
+  sessionStorage.setItem('currentTeacher', name);
+  document.getElementById('operator').value = name;
+  var icon = (name === DIRECTOR_NAME) ? '🔑' : '👩‍🏫';
+  document.getElementById('teacherBadgeText').textContent = icon + ' ' + name;
+  document.getElementById('loginOverlay').style.display = 'none';
+}
+
+function showLoginOverlay() {
+  document.getElementById('loginOverlay').style.display = 'flex';
+}
+
+// 綁定老師按鈕
+document.querySelectorAll('.teacher-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    setCurrentTeacher(this.dataset.name);
+  });
+});
+
+// 切換老師按鈕
+document.getElementById('switchTeacher').addEventListener('click', function() {
+  sessionStorage.removeItem('currentTeacher');
+  showLoginOverlay();
+});
+
+// =========================================
+// 主任登入 (密碼保護)
+// =========================================
+function showDirectorModal() {
+  document.getElementById('directorModal').style.display = 'flex';
+  document.getElementById('directorPassword').value = '';
+  document.getElementById('directorError').style.display = 'none';
+  setTimeout(function() { document.getElementById('directorPassword').focus(); }, 100);
+}
+
+function hideDirectorModal() {
+  document.getElementById('directorModal').style.display = 'none';
+}
+
+document.getElementById('directorLoginBtn').addEventListener('click', showDirectorModal);
+document.getElementById('directorCancel').addEventListener('click', hideDirectorModal);
+
+document.getElementById('directorConfirm').addEventListener('click', async function() {
+  var password = document.getElementById('directorPassword').value;
+  if (!password) return;
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = '驗證中...';
+
+  try {
+    var response = await fetch('/api/director-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: password })
+    });
+    var data = await response.json();
+
+    if (data.success) {
+      hideDirectorModal();
+      setCurrentTeacher(DIRECTOR_NAME);
+    } else {
+      document.getElementById('directorError').style.display = 'block';
+      document.getElementById('directorPassword').value = '';
+      document.getElementById('directorPassword').focus();
+    }
+  } catch (e) {
+    document.getElementById('directorError').style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✓ 確認登入';
+  }
+});
+
+document.getElementById('directorPassword').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('directorConfirm').click();
+  if (e.key === 'Escape') hideDirectorModal();
+});
+
+// 初始化：檢查是否已登入
+(function checkLogin() {
+  var teacher = getCurrentTeacher();
+  if (teacher && (TEACHERS.includes(teacher) || teacher === DIRECTOR_NAME)) {
+    setCurrentTeacher(teacher);
+  } else {
+    showLoginOverlay();
+  }
+})();
+
 // --- Tab 切換 ---
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -112,7 +210,7 @@ document.getElementById('batchSubmit').addEventListener('click', async function(
   const lines = raw.split('\n').filter(function(l) { return l.trim(); });
   const records = lines.map(function(line) {
     const parts = line.split(',').map(function(p) { return p.trim(); });
-    return { studentName: parts[0] || '', homeworkItem: parts[1] || '', completedTime: parts[2] || null, operator: parts[3] || '' };
+    return { studentName: parts[0] || '', homeworkItem: parts[1] || '', completedTime: parts[2] || null, operator: parts[3] || getCurrentTeacher() || '' };
   }).filter(function(r) { return r.studentName && r.homeworkItem; });
 
   if (records.length === 0) { showMessage('batchMessage', '格式錯誤，至少需要「學生姓名,作業項目」', 'error'); return; }
