@@ -1,0 +1,13 @@
+node_modules/
+.env
+*.log
+.DS_Store
+.vscode/
+.idea/
+*.csv
+credentials.json
+service-account*.json
+followers.csv
+user-ids.csv
+
+
