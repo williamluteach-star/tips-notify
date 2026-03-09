@@ -233,34 +233,51 @@ class HomeworkService {
 
   /**
    * 更新學生的 LINE User ID（配對用）
+   * 支援多位家長：以逗號分隔儲存，不重複新增
+   * 預覽模式（無 Google Sheets）靜默失敗，不拋出錯誤
    */
   async updateStudentLineId(studentName, lineUserId) {
     if (!this.sheets) await this.init();
-    if (!this.sheets) throw new Error('GOOGLE_SHEETS_NOT_CONFIGURED');
+    if (!this.sheets) return null; // 預覽模式靜默失敗
 
     try {
       // 找到該學生在工作表的行號
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: '學生資料表!A2:F',
+        range: '學生資料表!A2:C',
       });
 
       const rows = response.data.values || [];
       const rowIndex = rows.findIndex(row => row[0] === studentName);
 
       if (rowIndex === -1) {
-        throw new Error(`找不到學生：${studentName}`);
+        console.warn(`[GSheets] 找不到學生：${studentName}，略過同步`);
+        return null;
       }
 
       const sheetRow = rowIndex + 2; // 1-indexed + header row
+      // 讀取現有的 ID（可能是逗號分隔的多個）
+      const existingRaw = (rows[rowIndex] || [])[2] || '';
+      const existingIds = existingRaw
+        ? existingRaw.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+
+      // 只有尚未存在才新增，避免重複
+      if (!existingIds.includes(lineUserId)) {
+        existingIds.push(lineUserId);
+      }
+
+      const newValue = existingIds.join(',');
+
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
         range: `學生資料表!C${sheetRow}`,
         valueInputOption: 'USER_ENTERED',
-        resource: { values: [[lineUserId]] },
+        resource: { values: [[newValue]] },
       });
 
-      return { studentName, lineUserId };
+      console.log(`[GSheets] 已同步 ${studentName} 的家長 LINE ID（${existingIds.length} 位）`);
+      return { studentName, lineUserId: newValue };
     } catch (error) {
       console.error('更新 LINE User ID 錯誤:', error);
       throw new Error(`更新失敗: ${error.message}`);

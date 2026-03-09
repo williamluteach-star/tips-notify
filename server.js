@@ -72,35 +72,34 @@ async function handleMessage(event) {
   const userMessage = event.message.text;
   const userId = event.source.userId;
 
-  // 嘗試從訊息中提取學生姓名並自動配對
-  const studentName = parentPair.extractStudentName(userMessage);
-  
-  if (studentName) {
-    // 自動配對並記錄（本地 JSON）
-    parentPair.addPair(userId, studentName, userMessage);
+  // 嘗試從訊息中提取學生姓名並自動配對（支援多位兄弟姐妹）
+  const studentNames = parentPair.extractStudentNames(userMessage);
 
-    // ✅ 同步更新 Google Sheets，讓通知系統能使用正確的 User ID
-    try {
-      await homeworkService.updateStudentLineId(studentName, userId);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('✅ 自動配對成功！Google Sheets 已更新！');
-      console.log(`   學生姓名: ${studentName}`);
-      console.log(`   User ID: ${userId}`);
-      console.log(`   訊息內容: ${userMessage}`);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    } catch (err) {
-      console.warn('⚠️  Google Sheets 更新失敗，已保存到本地：', err.message);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('✅ 自動配對成功（本地記錄）');
-      console.log(`   學生姓名: ${studentName}`);
-      console.log(`   User ID: ${userId}`);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  if (studentNames.length > 0) {
+    // 每位學生各自配對同一個家長 User ID
+    for (const name of studentNames) {
+      parentPair.addPair(userId, name, userMessage);
     }
 
-    // 回覆家長確認
+    // 同步配對到 Google Sheets（讓配對在部署重啟後仍然有效）
+    for (const name of studentNames) {
+      homeworkService.updateStudentLineId(name, userId).catch(e =>
+        console.warn('[sync] 無法同步配對到 Google Sheets:', e.message)
+      );
+    }
+
+    const nameList = studentNames.join('、');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('✅ 自動配對成功（本地記錄＋Google Sheets）');
+    console.log(`   學生姓名: ${nameList}`);
+    console.log(`   User ID: ${userId}`);
+    console.log(`   訊息內容: ${userMessage}`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    // 回覆家長確認（列出所有孩子）
     await client.replyMessage(event.replyToken, {
       type: 'text',
-      text: `感謝您的回覆！我們已收到${studentName}的家長資訊。您將收到孩子作業完成的相關通知。`,
+      text: `感謝您的回覆！我們已收到${nameList}的家長資訊。您將收到孩子作業完成的相關通知。`,
     });
     return;
   }
@@ -211,17 +210,23 @@ app.post('/api/homework', async (req, res) => {
     }
 
     // 發送通知給家長
+    let notifyResult = null;
     try {
-      await notificationService.notifyParent(studentName, homeworkItem, completedTime);
+      notifyResult = await notificationService.notifyParent(studentName, homeworkItem, completedTime);
     } catch (error) {
-      console.warn('發送通知失敗（可能是 LINE Bot 未設定）:', error.message);
-      // 即使通知失敗，記錄仍算成功
+      console.warn('發送通知失敗:', error.message);
+      notifyResult = { success: false, message: error.message };
     }
+
+    const notifyMsg = notifyResult?.success
+      ? `通知已發送（${notifyResult.message}）`
+      : `⚠️ 通知未送達：${notifyResult?.message || '未知原因'}`;
 
     res.json({
       success: true,
-      message: '作業記錄已建立，通知已發送',
+      message: `作業記錄已建立。${notifyMsg}`,
       record,
+      notification: notifyResult,
     });
   } catch (error) {
     console.error('記錄作業錯誤:', error);
@@ -374,7 +379,7 @@ app.get('/api/bot-info', async (req, res) => {
 });
 
 // API: 取得已捕捉但未配對的家長 User ID
-app.get('/api/pending-userids', (req, res) => {
+app.get('/api/pending-userids', async (req, res) => {
   const fs = require('fs');
   const path = require('path');
 
@@ -405,8 +410,13 @@ app.get('/api/pending-userids', (req, res) => {
     }
   }
 
-  // 3. 整合：把 pairs 裡的資料也納入，標記是否已配對
-  const pairedMap = new Map(pairs.map(p => [p.userId, p.studentName]));
+  // 3. 整合：把 pairs 裡的資料也納入，標記所有已配對的學生（支援多孩子）
+  // pairedMap: userId → [studentName, ...]
+  const pairedMap = new Map();
+  for (const p of pairs) {
+    if (!pairedMap.has(p.userId)) pairedMap.set(p.userId, []);
+    pairedMap.get(p.userId).push(p.studentName);
+  }
 
   const result = [];
 
@@ -417,49 +427,108 @@ app.get('/api/pending-userids', (req, res) => {
       lastSeen: info.lastSeen,
       lastAction: info.lastAction,
       lastMessage: info.lastMessage,
-      pairedStudent: pairedMap.get(uid) || null,
+      pairedStudents: pairedMap.get(uid) || [],
       source: 'webhook',
     });
   }
 
-  // 來自 pairs.json 但不在 log 裡的
+  // 來自 pairs.json 但不在 log 裡的（取最新一筆的時間）
+  const seenInPairs = new Set();
   for (const p of pairs) {
-    if (!logUserIds.has(p.userId)) {
+    if (!logUserIds.has(p.userId) && !seenInPairs.has(p.userId)) {
+      seenInPairs.add(p.userId);
       result.push({
         userId: p.userId,
         lastSeen: p.updatedAt || p.createdAt,
-        lastAction: '自動配對',
+        lastAction: '手動配對',
         lastMessage: p.message || '',
-        pairedStudent: p.studentName,
+        pairedStudents: pairedMap.get(p.userId) || [],
         source: 'pairs',
       });
     }
   }
 
-  // 按時間排序（最新在前）
-  result.sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen));
+  // 4. 也從 Google Sheets 讀取已有 lineUserId 的學生（部署重啟後配對仍可見）
+  try {
+    const allStudents = await homeworkService.getAllStudents();
+    for (const student of allStudents) {
+      if (!student.lineUserId) continue;
+      const ids = student.lineUserId.split(',').map(s => s.trim()).filter(Boolean);
+      for (const uid of ids) {
+        const existing = result.find(r => r.userId === uid);
+        if (existing) {
+          // 補充 pairedStudents（若本地記錄的配對不完整）
+          if (!existing.pairedStudents.includes(student.studentName)) {
+            existing.pairedStudents.push(student.studentName);
+          }
+        } else {
+          // Google Sheets 有記錄但本地已清空，補入清單
+          result.push({
+            userId: uid,
+            lastSeen: '(Google Sheets)',
+            lastAction: '已配對（Google Sheets）',
+            lastMessage: '',
+            pairedStudents: [student.studentName],
+            source: 'sheets',
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[pending-userids] 無法從 Google Sheets 讀取:', e.message);
+  }
+
+  // 按時間排序（最新在前；Google Sheets 來源排末尾）
+  result.sort((a, b) => {
+    if (a.lastSeen === '(Google Sheets)') return 1;
+    if (b.lastSeen === '(Google Sheets)') return -1;
+    return new Date(b.lastSeen) - new Date(a.lastSeen);
+  });
 
   res.json({ success: true, userIds: result, total: result.length });
 });
 
-// API: 將 User ID 配對到指定學生（更新 Google Sheets + parent-pairs.json）
+// API: 將 User ID 配對到指定學生
+// 支援多位家長配對同一學生（爸爸媽媽各自配對），以 parent-pairs.json 為主
 app.post('/api/pair-userid', async (req, res) => {
   const { userId, studentName } = req.body;
   if (!userId || !studentName) {
     return res.status(400).json({ error: '缺少 userId 或 studentName' });
   }
 
-  // 1. 更新 parent-pairs.json
+  // 更新 parent-pairs.json（同一 userId 若重複配對則更新學生名稱）
   const parentPair = require('./scripts/pair-parents');
   parentPair.addPair(userId, studentName, '手動配對');
 
-  // 2. 更新 Google Sheets 學生資料表
+  // 同步到 Google Sheets 讓配對在部署重啟後也有效
+  homeworkService.updateStudentLineId(studentName, userId).catch(e =>
+    console.warn('[sync] 無法同步配對到 Google Sheets:', e.message)
+  );
+
+  res.json({ success: true, message: `✅ 已將 ${userId} 配對給 ${studentName}` });
+});
+
+// API: 刪除配對（刪除某 userId 的所有配對）
+app.delete('/api/pair-userid/:userId', (req, res) => {
+  const { userId } = req.params;
   try {
-    await homeworkService.updateStudentLineId(studentName, userId);
-    res.json({ success: true, message: `✅ 已將 ${userId} 配對給 ${studentName}，並更新 Google Sheets` });
+    const parentPair = require('./scripts/pair-parents');
+    parentPair.removePair(decodeURIComponent(userId));
+    res.json({ success: true, message: '已刪除配對' });
   } catch (e) {
-    // Sheets 更新失敗也回傳部分成功
-    res.json({ success: true, message: `✅ 已配對到本機記錄，但 Google Sheets 更新失敗：${e.message}` });
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// API: 精準刪除：只刪除指定 userId + studentName 的那一筆配對
+app.delete('/api/pair-userid/:userId/:studentName', (req, res) => {
+  const { userId, studentName } = req.params;
+  try {
+    const parentPair = require('./scripts/pair-parents');
+    parentPair.removePairByStudent(decodeURIComponent(userId), decodeURIComponent(studentName));
+    res.json({ success: true, message: `已移除 ${decodeURIComponent(studentName)} 的配對` });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 

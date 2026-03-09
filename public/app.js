@@ -361,8 +361,8 @@ async function loadPairingList() {
 
     const userIds = pairData.userIds || [];
     const students = studentData.students || [];
-    const unpaired = userIds.filter(function(u) { return !u.pairedStudent; });
-    const paired = userIds.filter(function(u) { return !!u.pairedStudent; });
+    const unpaired = userIds.filter(function(u) { return (u.pairedStudents || []).length === 0; });
+    const paired = userIds.filter(function(u) { return (u.pairedStudents || []).length > 0; });
 
     // 統計
     stats.innerHTML =
@@ -383,24 +383,39 @@ async function loadPairingList() {
 
     var rows = '';
     userIds.forEach(function(u, idx) {
-      const isPaired = !!u.pairedStudent;
+      const pairedStudents = u.pairedStudents || [];
+      const isPaired = pairedStudents.length > 0;
       const rowClass = isPaired ? 'paired-row' : 'unpaired-row';
       const timeStr = u.lastSeen ? new Date(u.lastSeen).toLocaleString('zh-TW') : '-';
+
+      // 已配對學生的 badges（每個有獨立刪除按鈕）
+      var badges = '';
+      pairedStudents.forEach(function(name) {
+        badges +=
+          '<div class="pair-inline" style="margin-bottom:4px;">' +
+          '<span class="badge badge-success">✅ ' + name + '</span>' +
+          '<button class="btn btn-sm btn-danger delete-student-btn" ' +
+            'data-uid="' + u.userId + '" data-student="' + name + '" ' +
+            'title="移除 ' + name + ' 的配對">🗑️</button>' +
+          '</div>';
+      });
+
+      // 新增孩子的下拉選單（無論是否已配對都顯示）
+      var addMore =
+        '<div class="pair-inline" style="margin-top:' + (isPaired ? '6px' : '0') + ';">' +
+        '<select id="pairSel_' + idx + '" class="pair-select">' + studentOpts + '</select>' +
+        '<button class="btn btn-sm btn-primary pair-btn" data-uid="' + u.userId + '" data-idx="' + idx + '">' +
+          (isPaired ? '再加一位' : '配對') +
+        '</button>' +
+        '</div>';
+
       rows +=
         '<tr class="' + rowClass + '">' +
         '<td class="uid-cell"><code>' + u.userId + '</code></td>' +
         '<td>' + (u.lastAction || '-') + '</td>' +
         '<td class="msg-cell">' + (u.lastMessage || '-') + '</td>' +
         '<td>' + timeStr + '</td>' +
-        '<td>' +
-          (isPaired
-            ? '<span class="badge badge-success">✅ ' + u.pairedStudent + '</span>'
-            : '<div class="pair-inline">' +
-              '<select id="pairSel_' + idx + '" class="pair-select">' + studentOpts + '</select>' +
-              '<button class="btn btn-sm btn-primary pair-btn" data-uid="' + u.userId + '" data-idx="' + idx + '">配對</button>' +
-              '</div>'
-          ) +
-        '</td>' +
+        '<td>' + badges + addMore + '</td>' +
         '</tr>';
     });
 
@@ -411,7 +426,7 @@ async function loadPairingList() {
       '<tbody>' + rows + '</tbody>' +
       '</table></div>';
 
-    // 綁定配對按鈕
+    // 綁定配對按鈕（新增 / 再加一位）
     container.querySelectorAll('.pair-btn').forEach(function(btn) {
       btn.addEventListener('click', async function() {
         const uid = this.dataset.uid;
@@ -437,6 +452,37 @@ async function loadPairingList() {
           alert('❌ 網路錯誤：' + e.message);
           this.disabled = false;
           this.textContent = '配對';
+        }
+      });
+    });
+
+    // 綁定單個學生刪除按鈕（精準刪除 userId + studentName）
+    container.querySelectorAll('.delete-student-btn').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        const uid = this.dataset.uid;
+        const student = this.dataset.student;
+        if (!confirm('確定要移除「' + student + '」的配對嗎？\n\nUser ID: ' + uid)) return;
+        this.disabled = true;
+        this.textContent = '⏳';
+        try {
+          const res = await fetch(
+            '/api/pair-userid/' + encodeURIComponent(uid) + '/' + encodeURIComponent(student),
+            { method: 'DELETE' }
+          );
+          const data = await res.json();
+          if (data.success) {
+            loadPairingList();
+            loadStudentDropdown();
+            loadStudentList();
+          } else {
+            alert('❌ 刪除失敗：' + (data.error || '未知錯誤'));
+            this.disabled = false;
+            this.textContent = '🗑️';
+          }
+        } catch (e) {
+          alert('❌ 網路錯誤：' + e.message);
+          this.disabled = false;
+          this.textContent = '🗑️';
         }
       });
     });

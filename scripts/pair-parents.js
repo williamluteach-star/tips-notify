@@ -31,14 +31,14 @@ function savePairs(pairs) {
 }
 
 // 新增配對
+// 同一個 userId 可以配對多位學生（兄弟姐妹）
+// 重複判斷：userId + studentName 都相同才算重複（更新訊息），否則新增一筆
 function addPair(userId, studentName, message = '') {
   const pairs = loadPairs();
-  
-  // 檢查是否已存在
-  const existing = pairs.find(p => p.userId === userId);
+
+  // 檢查 userId + studentName 組合是否已存在
+  const existing = pairs.find(p => p.userId === userId && p.studentName === studentName);
   if (existing) {
-    console.log(`⚠️  User ID ${userId} 已存在，更新為：${studentName}`);
-    existing.studentName = studentName;
     existing.message = message;
     existing.updatedAt = new Date().toISOString();
   } else {
@@ -50,36 +50,64 @@ function addPair(userId, studentName, message = '') {
       updatedAt: new Date().toISOString(),
     });
   }
-  
+
   savePairs(pairs);
   return pairs;
 }
 
-// 從訊息中提取學生姓名
-function extractStudentName(message) {
-  // 常見格式：
-  // "我是XXX的家長"
-  // "我是XXX的媽媽"
-  // "我是XXX的爸爸"
-  // "XXX的家長"
-  // "查詢 XXX"
-  
+// 從訊息中提取學生姓名（支援多位兄弟姐妹）
+// 回傳陣列，例如 ["陸宗呈", "陸宗凱"]
+// 支援格式：
+//   "我是A和B的媽媽"　→ ["A", "B"]
+//   "我是A、B、C的家長" → ["A", "B", "C"]
+//   "我是A跟B的爸爸"   → ["A", "B"]
+//   "我是A與B的家長"   → ["A", "B"]
+//   "我是A的媽媽"      → ["A"]
+function extractStudentNames(message) {
+  const ROLES = '家長|媽媽|爸爸|父親|母親|阿嬤|阿公|爺爺|奶奶|祖父|祖母|監護人';
+  const SEPARATOR = /[和跟與、,，及]/g;
+
   const patterns = [
-    /我是(.+?)的(?:家長|媽媽|爸爸|父親|母親)/,
-    /(.+?)的(?:家長|媽媽|爸爸|父親|母親)/,
+    new RegExp(`我是(.+?)的(?:${ROLES})`),
+    new RegExp(`(.+?)的(?:${ROLES})`),
     /查詢\s*(.+)/,
     /學生[：:]\s*(.+)/,
-    /(.+?)的家長/,
   ];
-  
+
   for (const pattern of patterns) {
     const match = message.match(pattern);
     if (match && match[1]) {
-      return match[1].trim();
+      const names = match[1]
+        .split(SEPARATOR)
+        .map(n => n.trim())
+        .filter(n => n.length > 0 && n.length <= 10); // 過濾掉過長的雜訊
+      if (names.length > 0) return names;
     }
   }
-  
-  return null;
+
+  return [];
+}
+
+// 向下相容：只回傳第一個學生姓名（舊版呼叫用）
+function extractStudentName(message) {
+  const names = extractStudentNames(message);
+  return names.length > 0 ? names[0] : null;
+}
+
+// 刪除某 userId 的所有配對
+function removePair(userId) {
+  const pairs = loadPairs();
+  const filtered = pairs.filter(p => p.userId !== userId);
+  savePairs(filtered);
+  return filtered;
+}
+
+// 精準刪除：只刪除指定 userId + studentName 的那一筆
+function removePairByStudent(userId, studentName) {
+  const pairs = loadPairs();
+  const filtered = pairs.filter(p => !(p.userId === userId && p.studentName === studentName));
+  savePairs(filtered);
+  return filtered;
 }
 
 // 匯出為 CSV（方便匯入 Google Sheets）
@@ -145,4 +173,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { addPair, extractStudentName, loadPairs, exportToCSV };
+module.exports = { addPair, removePair, removePairByStudent, extractStudentName, extractStudentNames, loadPairs, exportToCSV };

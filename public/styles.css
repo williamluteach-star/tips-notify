@@ -71,6 +71,19 @@
     transform: translateY(0);
 }
 
+/* 刪除按鈕 */
+.btn-danger {
+    background: transparent;
+    border: 1.5px solid #e0e0e0;
+    color: #bbb;
+    transition: all 0.2s;
+}
+.btn-danger:hover {
+    background: #fff1f1;
+    border-color: #e53e3e;
+    color: #e53e3e;
+}
+
 /* 主任登入按鈕（登入卡片底部） */
 .director-section {
     margin-top: 20px;

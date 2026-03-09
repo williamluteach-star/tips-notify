@@ -1,5 +1,7 @@
 const line = require('@line/bot-sdk');
 const moment = require('moment');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 // 只有在有真實 token 時才初始化 LINE Client
@@ -18,7 +20,27 @@ const homeworkService = require('./homeworkService');
 
 class NotificationService {
   /**
-   * 通知家長作業完成
+   * 從 parent-pairs.json 取得某學生所有配對的家長 LINE User ID
+   * 支援爸媽同時配對同一學生（多對一）
+   */
+  getParentLineUserIds(studentName) {
+    const pairsFile = path.join(__dirname, '..', 'parent-pairs.json');
+    try {
+      if (fs.existsSync(pairsFile)) {
+        const pairs = JSON.parse(fs.readFileSync(pairsFile, 'utf-8'));
+        const matched = pairs
+          .filter(p => p.studentName === studentName)
+          .map(p => p.userId);
+        if (matched.length > 0) return matched;
+      }
+    } catch (e) {
+      console.warn('[notification] 讀取 parent-pairs.json 失敗:', e.message);
+    }
+    return [];
+  }
+
+  /**
+   * 通知家長作業完成（支援多位家長同時收到）
    */
   async notifyParent(studentName, homeworkItem, completedTime) {
     if (!client) {
@@ -27,10 +49,18 @@ class NotificationService {
     }
 
     try {
-      // 取得家長的LINE User ID
-      const lineUserId = await homeworkService.getParentLineUserId(studentName);
+      // 先從 parent-pairs.json 取得所有配對的家長 ID
+      let lineUserIds = this.getParentLineUserIds(studentName);
 
-      if (!lineUserId) {
+      // 若 parent-pairs.json 沒有資料，fallback 到 Google Sheets（支援逗號分隔多位家長）
+      if (lineUserIds.length === 0) {
+        const fallbackStr = await homeworkService.getParentLineUserId(studentName);
+        if (fallbackStr) {
+          lineUserIds = fallbackStr.split(',').map(s => s.trim()).filter(Boolean);
+        }
+      }
+
+      if (lineUserIds.length === 0) {
         console.warn(`找不到學生 ${studentName} 的家長LINE ID`);
         return { success: false, message: '找不到家長LINE ID' };
       }
@@ -46,10 +76,25 @@ class NotificationService {
         text: `【作業完成通知】\n\n${studentName}已完成以下作業：\n📝 ${homeworkItem}\n⏰ 完成時間：${timeFormatted}\n\n感謝您的關注！`,
       };
 
-      // 發送訊息
-      await client.pushMessage(lineUserId, message);
+      // 發送給所有配對的家長
+      const results = [];
+      for (const uid of lineUserIds) {
+        try {
+          await client.pushMessage(uid, message);
+          console.log(`   ✅ 已發送給 ${uid}（${studentName} 的家長）`);
+          results.push({ userId: uid, success: true });
+        } catch (e) {
+          console.error(`   ❌ 發送給 ${uid} 失敗:`, e.message);
+          results.push({ userId: uid, success: false, error: e.message });
+        }
+      }
 
-      return { success: true, message: '通知已發送' };
+      const successCount = results.filter(r => r.success).length;
+      return {
+        success: successCount > 0,
+        message: `已發送給 ${successCount}/${lineUserIds.length} 位家長`,
+        results,
+      };
     } catch (error) {
       console.error('發送通知錯誤:', error);
       throw new Error(`發送通知失敗: ${error.message}`);
@@ -78,32 +123,41 @@ class NotificationService {
         groupedByStudent[record.學生姓名].push(record);
       });
 
-      // 發送給每位家長
+      // 發送給每位學生的所有家長
       const results = [];
       for (const [studentName, studentRecords] of Object.entries(groupedByStudent)) {
-        try {
-          const lineUserId = await homeworkService.getParentLineUserId(studentName);
-          if (!lineUserId) {
-            results.push({ studentName, success: false, message: '找不到LINE ID' });
-            continue;
+        // 先從 parent-pairs.json 取得所有配對的家長 ID
+        let lineUserIds = this.getParentLineUserIds(studentName);
+
+        // fallback 到 Google Sheets（支援逗號分隔多位家長）
+        if (lineUserIds.length === 0) {
+          const fallbackStr = await homeworkService.getParentLineUserId(studentName);
+          if (fallbackStr) {
+            lineUserIds = fallbackStr.split(',').map(s => s.trim()).filter(Boolean);
           }
+        }
 
-          // 建立摘要訊息
-          let message = `【${moment(targetDate).format('YYYY年MM月DD日')} 作業完成摘要】\n\n${studentName}今日完成：\n\n`;
-          studentRecords.forEach((record, index) => {
-            message += `${index + 1}. ${record.作業項目}\n   ⏰ ${record.完成時間}\n\n`;
-          });
-          message += `共完成 ${studentRecords.length} 項作業\n\n感謝您的關注！`;
+        if (lineUserIds.length === 0) {
+          results.push({ studentName, success: false, message: '找不到LINE ID' });
+          continue;
+        }
 
-          await client.pushMessage(lineUserId, {
-            type: 'text',
-            text: message,
-          });
+        // 建立摘要訊息
+        let msgText = `【${moment(targetDate).format('YYYY年MM月DD日')} 作業完成摘要】\n\n${studentName}今日完成：\n\n`;
+        studentRecords.forEach((record, index) => {
+          msgText += `${index + 1}. ${record.作業項目}\n   ⏰ ${record.完成時間}\n\n`;
+        });
+        msgText += `共完成 ${studentRecords.length} 項作業\n\n感謝您的關注！`;
 
-          results.push({ studentName, success: true });
-        } catch (error) {
-          console.error(`發送摘要給 ${studentName} 錯誤:`, error);
-          results.push({ studentName, success: false, error: error.message });
+        // 發送給所有配對的家長
+        for (const uid of lineUserIds) {
+          try {
+            await client.pushMessage(uid, { type: 'text', text: msgText });
+            results.push({ studentName, userId: uid, success: true });
+          } catch (error) {
+            console.error(`發送摘要給 ${studentName}（${uid}）錯誤:`, error);
+            results.push({ studentName, userId: uid, success: false, error: error.message });
+          }
         }
       }
 
