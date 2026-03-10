@@ -158,7 +158,11 @@ class HomeworkService {
       });
 
       const students = studentResponse.data.values || [];
-      const student = students.find(row => row[2] === lineUserId);
+      // 支援逗號分隔多位家長：只要 lineUserId 包含在欄位C內即符合
+      const student = students.find(row => {
+        const ids = (row[2] || '').split(',').map(s => s.trim()).filter(Boolean);
+        return ids.includes(lineUserId);
+      });
 
       if (!student) {
         return [];
@@ -176,7 +180,9 @@ class HomeworkService {
       const records = (homeworkResponse.data.values || [])
         .filter(row => {
           if (row[1] !== studentName) return false;
-          const recordDate = moment(row[0], 'YYYY-MM-DD HH:mm:ss');
+          // 支援多種日期格式
+          const recordDate = moment(row[0], ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss', moment.ISO_8601], true);
+          if (!recordDate.isValid()) return true; // 無法解析的日期仍顯示
           return recordDate.isAfter(cutoffDate);
         })
         .map(row => ({
