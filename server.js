@@ -145,11 +145,11 @@ async function handleMessage(event) {
     return;
   }
 
-  // 預設回覆
-  await client.replyMessage(event.replyToken, {
-    type: 'text',
-    text: '感謝您的訊息！如需查詢作業記錄，請輸入「查詢」或「查詢作業」。',
-  });
+  // 預設回覆（已關閉，如需重新開啟請取消下方註解）
+  // await client.replyMessage(event.replyToken, {
+  //   type: 'text',
+  //   text: '感謝您的訊息！如需查詢作業記錄，請輸入「查詢」或「查詢作業」。',
+  // });
 }
 
 // 處理加好友事件
