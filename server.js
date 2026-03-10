@@ -557,6 +557,40 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// LINE 診斷 API：檢查 Token 有效性 + 每月配額
+app.get('/api/debug/line-status', async (req, res) => {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (!token || token === 'dummy_token') {
+    return res.json({ error: 'LINE_CHANNEL_ACCESS_TOKEN 未設定' });
+  }
+  const https = require('https');
+  const fetch = (url) => new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { Authorization: `Bearer ${token}` } }, (response) => {
+      let data = '';
+      response.on('data', chunk => data += chunk);
+      response.on('end', () => {
+        resolve({ status: response.statusCode, body: (() => { try { return JSON.parse(data); } catch { return data; } })() });
+      });
+    });
+    req.on('error', reject);
+  });
+  try {
+    const [quota, usage, profile] = await Promise.all([
+      fetch('https://api.line.me/v2/bot/message/quota'),
+      fetch('https://api.line.me/v2/bot/message/quota/consumption'),
+      fetch('https://api.line.me/v2/bot/info'),
+    ]);
+    res.json({
+      token_prefix: token.substring(0, 20) + '...',
+      quota: { status: quota.status, data: quota.body },
+      usage: { status: usage.status, data: usage.body },
+      bot_info: { status: profile.status, data: profile.body },
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // 啟動伺服器
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
