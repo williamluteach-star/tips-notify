@@ -43,32 +43,52 @@
 
 .teacher-buttons {
     display: flex;
-    gap: 16px;
+    gap: 24px;
     justify-content: center;
     flex-wrap: wrap;
+    padding: 8px 0;
 }
 
 .teacher-btn {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(145deg, #7B7FDB 0%, #5A4FCF 100%);
     color: white;
     border: none;
-    border-radius: 14px;
-    padding: 18px 32px;
-    font-size: 1.2rem;
-    font-weight: 600;
+    border-radius: 50%;
+    width: 88px;
+    height: 88px;
     cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-    min-width: 130px;
-    box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
+    box-shadow: 0 4px 18px rgba(90, 79, 207, 0.38), 0 1px 4px rgba(0,0,0,0.12);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 0;
+}
+
+.btn-emoji {
+    font-size: 1.9rem;
+    line-height: 1;
+    display: block;
+}
+
+.btn-name {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    display: block;
+    opacity: 0.92;
 }
 
 .teacher-btn:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(102,126,234,0.5);
+    transform: scale(1.1);
+    box-shadow: 0 8px 28px rgba(90, 79, 207, 0.48), 0 2px 8px rgba(0,0,0,0.15);
 }
 
 .teacher-btn:active {
-    transform: translateY(0);
+    transform: scale(0.94);
+    box-shadow: 0 2px 10px rgba(90, 79, 207, 0.3);
 }
 
 /* 刪除按鈕 */
