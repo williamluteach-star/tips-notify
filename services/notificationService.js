@@ -73,7 +73,7 @@ class NotificationService {
       // 建立訊息
       const message = {
         type: 'text',
-        text: `【作業完成通知】\n\n${studentName}已完成以下作業：\n📝 ${homeworkItem}\n⏰ 完成時間：${timeFormatted}\n\n感謝您的關注！`,
+        text: `🎉 作業完成通知 🎉\n\n👦 ${studentName} 已完成以下作業：\n\n📚 ${homeworkItem}\n\n⏰ 完成時間：${timeFormatted}\n\n✅ 繼續加油！感謝您的關注 🙏`,
       };
 
       // 發送給所有配對的家長

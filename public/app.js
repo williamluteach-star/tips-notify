@@ -5,7 +5,7 @@
 // =========================================
 // 老師登入 (sessionStorage 點名機制)
 // =========================================
-var TEACHERS = ['Doris', 'Peggy'];
+var TEACHERS = ['Doris', 'Peggy', '姿莉', 'Anita', 'Phoebe', '太陽', '米漿', '小熊', 'Henry', '郁涵'];
 var DIRECTOR_NAME = '主任';
 
 function getCurrentTeacher() {
