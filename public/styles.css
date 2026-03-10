@@ -22,11 +22,11 @@
 }
 
 .login-logo {
-    width: 80px;
-    height: 80px;
+    width: 120px;
+    height: 120px;
     object-fit: contain;
     margin-bottom: 16px;
-    border-radius: 16px;
+    border-radius: 24px;
 }
 
 .login-card h2 {
@@ -49,30 +49,16 @@
 
 .teacher-buttons {
     position: relative;
-    width: 320px;
-    height: 320px;
+    width: 300px;
+    height: 300px;
     margin: 0 auto;
 }
 
-/* wrapper 負責把每個 icon 定位到圓上 */
+/* wrapper 初始隱藏，JS 計算後才定位顯示 */
 .btn-wrapper {
     position: absolute;
-    top: 50%; left: 50%;
-    width: 76px; height: 76px;
-    margin: -38px 0 0 -38px;
+    visibility: hidden;
 }
-
-/* 10 個 icon 均勻排在半徑 118px 的圓上，從正上方順時針 */
-.btn-wrapper:nth-child(1)  { transform: translate(   0px, -118px); }
-.btn-wrapper:nth-child(2)  { transform: translate(  69px,  -96px); }
-.btn-wrapper:nth-child(3)  { transform: translate( 112px,  -36px); }
-.btn-wrapper:nth-child(4)  { transform: translate( 112px,   36px); }
-.btn-wrapper:nth-child(5)  { transform: translate(  69px,   96px); }
-.btn-wrapper:nth-child(6)  { transform: translate(   0px,  118px); }
-.btn-wrapper:nth-child(7)  { transform: translate( -69px,   96px); }
-.btn-wrapper:nth-child(8)  { transform: translate(-112px,   36px); }
-.btn-wrapper:nth-child(9)  { transform: translate(-112px,  -36px); }
-.btn-wrapper:nth-child(10) { transform: translate( -69px,  -96px); }
 
 /* 按鈕本體：負責浮動動畫 */
 .teacher-btn {

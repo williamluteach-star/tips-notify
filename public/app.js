@@ -3,6 +3,81 @@
 // =========================================
 
 // =========================================
+// 老師 icon 圓形填充排列（每次刷新隨機）
+// =========================================
+function initRandomCircleLayout() {
+  var container = document.querySelector('.teacher-buttons');
+  if (!container) return;
+  var wrappers = Array.from(container.querySelectorAll('.btn-wrapper'));
+  if (!wrappers.length) return;
+
+  var C = 300;          // 容器邊長 px
+  var masterR = 138;    // 主圓半徑 px
+  var cx = C / 2, cy = C / 2;
+  var baseSize = 76;    // 基礎 icon 大小 px
+
+  // 為每個 icon 隨機大小（±30%）
+  var sizes = wrappers.map(function() {
+    return Math.round(baseSize * (0.70 + Math.random() * 0.60));
+  });
+
+  // 圓形填充：拒絕採樣，找到不超出主圓且與已放置 icon 重疊最少的位置
+  var placed = [];
+  wrappers.forEach(function(wrapper, i) {
+    var r = sizes[i] / 2;
+    var bestX = 0, bestY = 0, bestScore = Infinity;
+
+    for (var attempt = 0; attempt < 500; attempt++) {
+      // 均勻隨機點在主圓內（√rand 讓分布均勻）
+      var angle = Math.random() * Math.PI * 2;
+      var maxDist = Math.max(0, masterR - r);
+      var dist = Math.sqrt(Math.random()) * maxDist;
+      var tx = Math.cos(angle) * dist;
+      var ty = Math.sin(angle) * dist;
+
+      // 計算與已放置 icon 的重疊程度（允許最多 20% 重疊以求填滿）
+      var score = 0;
+      placed.forEach(function(p) {
+        var d = Math.sqrt((tx - p.x) * (tx - p.x) + (ty - p.y) * (ty - p.y));
+        var minD = (r + p.r) * 0.80;
+        if (d < minD) score += (minD - d);
+      });
+
+      if (score < bestScore) {
+        bestScore = score;
+        bestX = tx; bestY = ty;
+        if (score === 0) break;
+      }
+    }
+
+    placed.push({ x: bestX, y: bestY, r: r });
+
+    // 套用位置與大小（inline style 覆蓋 CSS）
+    var size = sizes[i];
+    wrapper.style.position = 'absolute';
+    wrapper.style.top    = (cy + bestY - r) + 'px';
+    wrapper.style.left   = (cx + bestX - r) + 'px';
+    wrapper.style.width  = size + 'px';
+    wrapper.style.height = size + 'px';
+    wrapper.style.margin = '0';
+    wrapper.style.transform = 'none';
+    wrapper.style.visibility = 'visible';
+
+    var btn = wrapper.querySelector('.teacher-btn');
+    if (btn) {
+      btn.style.width  = size + 'px';
+      btn.style.height = size + 'px';
+      var emoji = btn.querySelector('.btn-emoji');
+      var name  = btn.querySelector('.btn-name');
+      if (emoji) emoji.style.fontSize = Math.round(size * 0.38) + 'px';
+      if (name)  name.style.fontSize  = Math.round(size * 0.135) + 'px';
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', initRandomCircleLayout);
+
+// =========================================
 // 老師登入 (sessionStorage 點名機制)
 // =========================================
 var TEACHERS = ['Doris', 'Peggy', '姿莉', 'Anita', 'Phoebe', '太陽', '米漿', '小熊', 'Henry', '郁涵'];
