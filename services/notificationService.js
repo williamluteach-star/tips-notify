@@ -84,8 +84,10 @@ class NotificationService {
           console.log(`   ✅ 已發送給 ${uid}（${studentName} 的家長）`);
           results.push({ userId: uid, success: true });
         } catch (e) {
-          console.error(`   ❌ 發送給 ${uid} 失敗:`, e.message);
-          results.push({ userId: uid, success: false, error: e.message });
+          const lineError = e.response?.data || e.response?.body || e.message;
+          const statusCode = e.response?.status || e.statusCode || 'unknown';
+          console.error(`   ❌ 發送給 ${uid} 失敗 [HTTP ${statusCode}]:`, JSON.stringify(lineError));
+          results.push({ userId: uid, success: false, error: `HTTP ${statusCode}: ${JSON.stringify(lineError)}` });
         }
       }
 

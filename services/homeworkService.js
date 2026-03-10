@@ -236,6 +236,49 @@ class HomeworkService {
    * 支援多位家長：以逗號分隔儲存，不重複新增
    * 預覽模式（無 Google Sheets）靜默失敗，不拋出錯誤
    */
+  // 從 Google Sheets 移除指定學生的某個家長 LINE User ID
+  async removeStudentLineId(studentName, lineUserId) {
+    if (!this.sheets) await this.init();
+    if (!this.sheets) return null;
+
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: '學生資料表!A2:C',
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row[0] === studentName);
+
+      if (rowIndex === -1) {
+        console.warn(`[GSheets] 找不到學生：${studentName}`);
+        return null;
+      }
+
+      const sheetRow = rowIndex + 2;
+      const existingRaw = (rows[rowIndex] || [])[2] || '';
+      const existingIds = existingRaw
+        ? existingRaw.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+
+      const newIds = existingIds.filter(id => id !== lineUserId);
+      const newValue = newIds.join(',');
+
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `學生資料表!C${sheetRow}`,
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: [[newValue]] },
+      });
+
+      console.log(`[GSheets] 已移除 ${studentName} 的家長 LINE ID：${lineUserId}`);
+      return { studentName, lineUserId: newValue };
+    } catch (error) {
+      console.error('移除 LINE User ID 錯誤:', error);
+      throw new Error(`移除失敗: ${error.message}`);
+    }
+  }
+
   async updateStudentLineId(studentName, lineUserId) {
     if (!this.sheets) await this.init();
     if (!this.sheets) return null; // 預覽模式靜默失敗

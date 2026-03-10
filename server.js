@@ -521,12 +521,21 @@ app.delete('/api/pair-userid/:userId', (req, res) => {
 });
 
 // API: 精準刪除：只刪除指定 userId + studentName 的那一筆配對
-app.delete('/api/pair-userid/:userId/:studentName', (req, res) => {
+app.delete('/api/pair-userid/:userId/:studentName', async (req, res) => {
   const { userId, studentName } = req.params;
+  const uid = decodeURIComponent(userId);
+  const name = decodeURIComponent(studentName);
   try {
+    // 1. 從本地 parent-pairs.json 移除
     const parentPair = require('./scripts/pair-parents');
-    parentPair.removePairByStudent(decodeURIComponent(userId), decodeURIComponent(studentName));
-    res.json({ success: true, message: `已移除 ${decodeURIComponent(studentName)} 的配對` });
+    parentPair.removePairByStudent(uid, name);
+    // 2. 同步從 Google Sheets 移除（才是持久化的資料來源）
+    try {
+      await homeworkService.removeStudentLineId(name, uid);
+    } catch (gsErr) {
+      console.warn('[delete pair] Google Sheets 移除失敗（不影響本地）:', gsErr.message);
+    }
+    res.json({ success: true, message: `已移除 ${name} 的配對` });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
