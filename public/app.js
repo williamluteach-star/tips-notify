@@ -909,12 +909,6 @@ async function loadBotInfo() {
     // 帳號名稱
     document.getElementById('lineDisplayName').textContent = d.displayName || '（需 LINE API 連線取得）';
 
-    // 追蹤人數
-    if (typeof d.followersCount === 'number') {
-      document.getElementById('lineFollowersCount').textContent = d.followersCount.toLocaleString() + ' 人';
-    } else {
-      document.getElementById('lineFollowersCount').textContent = '（需 LINE API 連線取得）';
-    }
 
     // 頭像：固定使用本地 logo.png，不被 LINE API 覆蓋
     // (如需改回 LINE API 頭像，取消下方註解)
