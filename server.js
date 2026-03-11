@@ -35,7 +35,8 @@ if (client) {
 app.use('/api', express.json());
 
 // 靜態檔案服務（Web管理介面）
-app.use(express.static('public'));
+// extensions: ['html'] 讓 /parent-upload 可以不加 .html 直接存取
+app.use(express.static('public', { extensions: ['html'] }));
 
 // 引入模組
 const homeworkService = require('./services/homeworkService');
