@@ -147,6 +147,41 @@
                         <div id="batchMessage" class="message"></div>
                     </div>
                 </div>
+
+                <!-- 批量照片上傳 -->
+                <div class="card">
+                    <h2>📷 批量照片上傳</h2>
+                    <p class="card-desc">選擇多張照片，<strong>檔名含孩子名字</strong>（如：<code>張小明.jpg</code>、<code>李小花_作業.jpg</code>），系統自動比對學生。</p>
+                    <div class="batch-photo-section">
+                        <input type="file" id="batchPhotoInput" accept="image/*" multiple style="display:none">
+                        <button type="button" class="btn btn-secondary" id="batchPhotoSelectBtn">
+                            <span class="btn-icon">📁</span>
+                            選擇照片（可多選）
+                        </button>
+                        <div id="batchPhotoList" class="batch-photo-list" style="display:none">
+                            <table class="data-table" id="batchPhotoTable">
+                                <thead>
+                                    <tr>
+                                        <th>縮圖</th>
+                                        <th>檔名</th>
+                                        <th>學生</th>
+                                        <th>作業項目</th>
+                                        <th>移除</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="batchPhotoTbody"></tbody>
+                            </table>
+                            <div class="batch-photo-actions">
+                                <button type="button" class="btn btn-primary" id="batchPhotoSubmit">
+                                    <span class="btn-icon">📤</span>
+                                    上傳並提交全部
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="batchPhotoClear">清除</button>
+                            </div>
+                        </div>
+                        <div id="batchPhotoMessage" class="message"></div>
+                    </div>
+                </div>
             </section>
 
             <!-- Tab 2: 最近記錄 -->
@@ -315,7 +350,12 @@
                             <span class="btn-icon">📊</span>
                             發送今日摘要給所有家長
                         </button>
+                        <button id="incrementGradeBtn" class="btn btn-warning">
+                            <span class="btn-icon">🎓</span>
+                            學期升級（所有年級 +1）
+                        </button>
                     </div>
+                    <p class="card-desc" style="margin-top:8px">學期升級會將 Google Sheets 中所有學生的年級數字加 1（1-12制）。12年級學生將標記為「畢業」。此功能也會在每年9月1日自動執行。</p>
                     <div id="actionMessage" class="message"></div>
                 </div>
 

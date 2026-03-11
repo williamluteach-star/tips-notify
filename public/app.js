@@ -396,6 +396,168 @@ document.getElementById('homeworkForm').addEventListener('submit', async functio
   }
 });
 
+// =========================================
+// 批量照片上傳
+// =========================================
+var batchPhotoFiles = []; // { file, studentName, homeworkItem }
+var batchStudentList = []; // 從 API 取得的學生名單（供比對）
+
+// 載入批量照片的學生清單（從已載入的 dropdown 取）
+function getBatchStudentOptions(selected) {
+  var sel = document.getElementById('studentName');
+  var opts = '<option value="">-- 選擇學生 --</option>';
+  for (var i = 1; i < sel.options.length; i++) {
+    var name = sel.options[i].value;
+    var checked = name === selected ? ' selected' : '';
+    opts += '<option value="' + name + '"' + checked + '>' + name + '</option>';
+  }
+  return opts;
+}
+
+// 從檔名推測學生名字（嘗試在已知學生名單中找最長符合）
+function guessStudentFromFilename(filename) {
+  var sel = document.getElementById('studentName');
+  var names = [];
+  for (var i = 1; i < sel.options.length; i++) {
+    names.push(sel.options[i].value);
+  }
+  // 找出在檔名中出現的學生名（取最長的那個）
+  var matched = names.filter(function(n) { return filename.includes(n); });
+  matched.sort(function(a, b) { return b.length - a.length; }); // 最長優先
+  return matched[0] || '';
+}
+
+function renderBatchPhotoTable() {
+  var tbody = document.getElementById('batchPhotoTbody');
+  var list = document.getElementById('batchPhotoList');
+  if (!batchPhotoFiles.length) { list.style.display = 'none'; return; }
+  list.style.display = 'block';
+
+  tbody.innerHTML = batchPhotoFiles.map(function(item, idx) {
+    var dataUrl = item.preview || '';
+    return '<tr id="batchRow_' + idx + '">' +
+      '<td><img src="' + dataUrl + '" style="width:60px;height:60px;object-fit:cover;border-radius:6px;"></td>' +
+      '<td style="font-size:0.82rem;word-break:break-all">' + item.file.name + '</td>' +
+      '<td><select class="batch-student-sel" data-idx="' + idx + '">' + getBatchStudentOptions(item.studentName) + '</select></td>' +
+      '<td><input type="text" class="batch-hw-input" data-idx="' + idx + '" value="' + (item.homeworkItem || '') + '" placeholder="作業項目（選填）" style="width:130px"></td>' +
+      '<td><button type="button" class="btn btn-sm btn-danger batch-remove-btn" data-idx="' + idx + '">✕</button></td>' +
+      '</tr>';
+  }).join('');
+
+  // 綁定事件
+  tbody.querySelectorAll('.batch-student-sel').forEach(function(sel) {
+    sel.addEventListener('change', function() {
+      batchPhotoFiles[parseInt(this.dataset.idx)].studentName = this.value;
+    });
+  });
+  tbody.querySelectorAll('.batch-hw-input').forEach(function(inp) {
+    inp.addEventListener('input', function() {
+      batchPhotoFiles[parseInt(this.dataset.idx)].homeworkItem = this.value;
+    });
+  });
+  tbody.querySelectorAll('.batch-remove-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      batchPhotoFiles.splice(parseInt(this.dataset.idx), 1);
+      renderBatchPhotoTable();
+    });
+  });
+}
+
+document.getElementById('batchPhotoSelectBtn').addEventListener('click', function() {
+  document.getElementById('batchPhotoInput').click();
+});
+
+document.getElementById('batchPhotoInput').addEventListener('change', async function() {
+  var files = Array.from(this.files);
+  if (!files.length) return;
+
+  // 讀取每個檔案的預覽 + 推測學生名
+  var newItems = await Promise.all(files.map(function(file) {
+    return new Promise(function(resolve) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        resolve({
+          file: file,
+          preview: e.target.result,
+          studentName: guessStudentFromFilename(file.name),
+          homeworkItem: '',
+          status: 'pending',
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  }));
+
+  batchPhotoFiles = batchPhotoFiles.concat(newItems);
+  renderBatchPhotoTable();
+  this.value = ''; // 允許重複選同一檔案
+});
+
+document.getElementById('batchPhotoClear').addEventListener('click', function() {
+  batchPhotoFiles = [];
+  renderBatchPhotoTable();
+  document.getElementById('batchPhotoMessage').textContent = '';
+});
+
+document.getElementById('batchPhotoSubmit').addEventListener('click', async function() {
+  if (!batchPhotoFiles.length) return;
+
+  var operator = document.getElementById('operator').value || getCurrentTeacher() || '系統';
+  var btn = this;
+  btn.disabled = true;
+
+  var msgEl = document.getElementById('batchPhotoMessage');
+  var successCount = 0, failCount = 0;
+
+  for (var i = 0; i < batchPhotoFiles.length; i++) {
+    var item = batchPhotoFiles[i];
+    if (!item.studentName) {
+      msgEl.textContent = '⚠️ 第 ' + (i+1) + ' 張照片尚未選擇學生，請確認後再提交';
+      msgEl.className = 'message error';
+      btn.disabled = false;
+      return;
+    }
+    msgEl.textContent = '⏳ 處理第 ' + (i+1) + '/' + batchPhotoFiles.length + ' 張...';
+    msgEl.className = 'message info';
+
+    try {
+      // 1. 上傳照片到 Drive
+      var base64 = item.preview.split(',')[1];
+      var uploadRes = await fetch('/api/upload-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64: base64, mimeType: item.file.type, fileName: item.file.name }),
+      });
+      var uploadData = await uploadRes.json();
+      var photoUrl = (uploadData.success && uploadData.viewUrl) ? uploadData.viewUrl : '';
+
+      // 2. 記錄作業
+      var hwItem = item.homeworkItem || '作業照片';
+      var hwRes = await fetch('/api/homework', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentName: item.studentName,
+          homeworkItem: hwItem,
+          operator: operator,
+          photoUrl: photoUrl,
+        }),
+      });
+      var hwData = await hwRes.json();
+      if (hwData.success) successCount++;
+      else failCount++;
+    } catch (e) {
+      failCount++;
+    }
+  }
+
+  msgEl.textContent = '✅ 完成！' + successCount + ' 筆成功' + (failCount ? '，' + failCount + ' 筆失敗' : '');
+  msgEl.className = 'message ' + (failCount ? 'error' : 'success');
+  batchPhotoFiles = [];
+  renderBatchPhotoTable();
+  btn.disabled = false;
+});
+
 // --- 批量記錄 ---
 document.getElementById('batchSubmit').addEventListener('click', async function() {
   const raw = document.getElementById('batchInput').value.trim();
@@ -728,6 +890,22 @@ document.getElementById('manualPairForm').addEventListener('submit', async funct
     showMessage('manualPairMessage', '❌ 網路錯誤：' + err.message, 'error');
   } finally {
     btn.disabled = false;
+  }
+});
+
+// --- 學期升級 ---
+document.getElementById('incrementGradeBtn').addEventListener('click', async function() {
+  if (!confirm('確定要執行學期升級嗎？\n\n所有學生年級將 +1（1→2, 2→3...），12年級學生將標記為「畢業」。\n\n此操作會直接修改 Google Sheets，請確認後再執行。')) return;
+  this.disabled = true;
+  showMessage('actionMessage', '⏳ 年級升級中...', 'info');
+  try {
+    var res = await fetch('/api/students/increment-grade', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    var data = await res.json();
+    showMessage('actionMessage', data.success ? '✅ ' + data.message : '❌ ' + (data.error || '發生錯誤'), data.success ? 'success' : 'error');
+  } catch (err) {
+    showMessage('actionMessage', '❌ 網路錯誤：' + err.message, 'error');
+  } finally {
+    this.disabled = false;
   }
 });
 

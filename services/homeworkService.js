@@ -402,6 +402,69 @@ class HomeworkService {
   }
 
   /**
+   * 學期升級：將所有學生年級（數字 1-12）加 1
+   * 已是 12 的標記為「畢業」並跳過；非數字格式的也跳過
+   */
+  async incrementGrades() {
+    if (!this.sheets) await this.init();
+    if (!this.sheets) throw new Error('GOOGLE_SHEETS_NOT_CONFIGURED');
+
+    // 讀取整個學生資料表（A到B欄：姓名、年級）
+    const response = await this.sheets.spreadsheets.values.get({
+      spreadsheetId: this.spreadsheetId,
+      range: '學生資料表!A2:B',
+    });
+
+    const rows = response.data.values || [];
+    const updates = [];    // { row, newGrade }
+    const graduated = [];  // studentName of grade 12
+    const skipped = [];    // studentName with non-numeric grade
+
+    rows.forEach((row, i) => {
+      if (!row[0]) return; // 跳過空行
+      const studentName = row[0];
+      const gradeRaw = (row[1] || '').trim();
+      const grade = parseInt(gradeRaw, 10);
+
+      if (isNaN(grade)) {
+        skipped.push({ studentName, grade: gradeRaw });
+        return;
+      }
+
+      const sheetRow = i + 2; // 1-indexed + header
+      if (grade >= 12) {
+        graduated.push(studentName);
+        // 將年級標記為「畢業」
+        updates.push({ row: sheetRow, newGrade: '畢業' });
+      } else {
+        updates.push({ row: sheetRow, newGrade: String(grade + 1) });
+      }
+    });
+
+    // 批次更新（每個 cell 單獨 update，或用 batchUpdate）
+    if (updates.length > 0) {
+      const data = updates.map(u => ({
+        range: `學生資料表!B${u.row}`,
+        values: [[u.newGrade]],
+      }));
+      await this.sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        resource: {
+          valueInputOption: 'USER_ENTERED',
+          data,
+        },
+      });
+    }
+
+    return {
+      updated: updates.length,
+      graduated,
+      skipped,
+      details: updates,
+    };
+  }
+
+  /**
    * 取得指定日期的作業記錄
    */
   async getHomeworkByDate(date) {

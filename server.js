@@ -558,6 +558,20 @@ app.delete('/api/pair-userid/:userId/:studentName', async (req, res) => {
   }
 });
 
+// API: 學期升級 — 所有學生年級 +1（12 → 畢業）
+app.post('/api/students/increment-grade', async (req, res) => {
+  try {
+    const result = await homeworkService.incrementGrades();
+    const msg = `年級升級完成：共更新 ${result.updated} 位學生` +
+      (result.graduated.length ? `，其中 ${result.graduated.join('、')} 已畢業` : '') +
+      (result.skipped.length ? `；${result.skipped.length} 位非數字年級已跳過` : '');
+    res.json({ success: true, message: msg, result });
+  } catch (e) {
+    console.error('年級升級錯誤:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // API: 主任登入驗證
 app.post('/api/director-login', (req, res) => {
   const { password } = req.body;

@@ -929,6 +929,32 @@ body {
 .line-link:hover { text-decoration: underline; }
 
 /* =========================================
+   批量照片上傳
+   ========================================= */
+.batch-photo-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.batch-photo-list {
+    overflow-x: auto;
+}
+
+.batch-photo-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, #f39c12, #e67e22);
+    color: white;
+    border: none;
+}
+.btn-warning:hover { filter: brightness(1.08); }
+
+/* =========================================
    照片上傳區塊
    ========================================= */
 .photo-upload-area {
