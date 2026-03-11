@@ -232,7 +232,7 @@ document.getElementById('studentName').addEventListener('change', function() {
     hint.textContent = '';
     hint.style.color = '';
   } else if (!lineId) {
-    hint.textContent = '⚠️ 尚未設定家啷 LINE ID，無法發送通知';
+    hint.textContent = '⚠️ 尚未設定家長 LINE ID，無法發送通知';
     hint.style.color = '#e67e22';
   } else {
     hint.textContent = '✅ 已設定 LINE ID，可發送通知';
@@ -240,12 +240,176 @@ document.getElementById('studentName').addEventListener('change', function() {
   }
 });
 
-// --- 照片上傳（已改用 Google 表單，此區塊保留空白）---
+// --- 照片上傳（Cloudinary）---
+
+const CLOUDINARY_CLOUD  = 'dpqjusupf';
+const CLOUDINARY_PRESET = 'TIPS-homework report';
+
+(function setupPhotoUpload() {
+  const area = document.getElementById('photoUploadArea');
+  if (!area) return;
+  const input       = document.getElementById('photoInput');
+  const placeholder = area.querySelector('.photo-placeholder');
+  const preview     = area.querySelector('.photo-preview');
+  const previewImg  = document.getElementById('photoPreviewImg');
+  const removeBtn   = area.querySelector('.photo-remove');
+
+  window._pendingPhotoFile = null;
+
+  function showPreview(file) {
+    window._pendingPhotoFile = file;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      previewImg.src = e.target.result;
+      placeholder.style.display = 'none';
+      preview.style.display = 'flex';
+    };
+    reader.readAsDataURL(file);
+    const st = document.getElementById('photoStatus');
+    if (st) { st.textContent = ''; st.className = 'message photo-status'; }
+  }
+
+  function clearPhoto() {
+    window._pendingPhotoFile = null;
+    input.value = '';
+    previewImg.src = '';
+    placeholder.style.display = '';
+    preview.style.display = 'none';
+    const st = document.getElementById('photoStatus');
+    if (st) { st.textContent = ''; st.className = 'message photo-status'; }
+  }
+
+  area.addEventListener('click', function() { input.click(); });
+
+  area.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    area.style.borderColor = '#667eea';
+  });
+  area.addEventListener('dragleave', function() { area.style.borderColor = ''; });
+  area.addEventListener('drop', function(e) {
+    e.preventDefault();
+    area.style.borderColor = '';
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) showPreview(file);
+  });
+
+  input.addEventListener('change', function() {
+    if (this.files[0]) showPreview(this.files[0]);
+  });
+
+  removeBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    clearPhoto();
+  });
+})();
 
 async function uploadPendingPhoto() {
-  // 已改用 Google 表單上傳，直接回傳空字串
-  return '';
+  const file = window._pendingPhotoFile;
+  if (!file) return '';
+
+  const statusEl = document.getElementById('photoStatus');
+  if (statusEl) {
+    statusEl.textContent = '📤 上傳照片中...';
+    statusEl.className = 'message photo-status show info';
+  }
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('upload_preset', CLOUDINARY_PRESET);
+
+  const res  = await fetch('https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/image/upload', { method: 'POST', body: fd });
+  const data = await res.json();
+
+  if (data.secure_url) {
+    if (statusEl) { statusEl.textContent = '✅ 照片上傳成功'; statusEl.className = 'message photo-status show success'; }
+    return data.secure_url;
+  }
+  throw new Error(data.error ? data.error.message : '上傳失敗');
 }
+
+// --- 批量照片上傳 ---
+(function setupBatchPhotoUpload() {
+  const area      = document.getElementById('batchPhotoArea');
+  if (!area) return;
+  const input     = document.getElementById('batchPhotoInput');
+  const uploadBtn = document.getElementById('batchPhotoUpload');
+  const countEl   = document.getElementById('batchPhotoCount');
+  const msgEl     = document.getElementById('batchPhotoMessage');
+  const resultsEl = document.getElementById('batchPhotoResults');
+
+  let selectedFiles = [];
+
+  function updateUI() {
+    if (selectedFiles.length > 0) {
+      countEl.textContent = '已選 ' + selectedFiles.length + ' 張';
+      uploadBtn.disabled = false;
+      area.querySelector('.photo-hint').textContent = '已選 ' + selectedFiles.length + ' 張（點擊重新選擇）';
+    } else {
+      countEl.textContent = '';
+      uploadBtn.disabled = true;
+      area.querySelector('.photo-hint').textContent = '點擊選擇多張照片（或拖曳至此）';
+    }
+  }
+
+  area.addEventListener('click', function() { input.click(); });
+  area.addEventListener('dragover', function(e) { e.preventDefault(); area.style.borderColor = '#667eea'; });
+  area.addEventListener('dragleave', function() { area.style.borderColor = ''; });
+  area.addEventListener('drop', function(e) {
+    e.preventDefault(); area.style.borderColor = '';
+    selectedFiles = Array.from(e.dataTransfer.files).filter(function(f) { return f.type.startsWith('image/'); });
+    updateUI();
+  });
+  input.addEventListener('change', function() {
+    selectedFiles = Array.from(this.files).filter(function(f) { return f.type.startsWith('image/'); });
+    updateUI();
+  });
+
+  uploadBtn.addEventListener('click', async function() {
+    if (!selectedFiles.length) return;
+    uploadBtn.disabled = true;
+    resultsEl.innerHTML = '';
+    msgEl.textContent = '上傳中（0/' + selectedFiles.length + '）...';
+    msgEl.className = 'message show info';
+
+    var results = [];
+    for (var i = 0; i < selectedFiles.length; i++) {
+      var file = selectedFiles[i];
+      msgEl.textContent = '上傳中（' + (i + 1) + '/' + selectedFiles.length + '）：' + file.name;
+      try {
+        var fd = new FormData();
+        fd.append('file', file);
+        fd.append('upload_preset', CLOUDINARY_PRESET);
+        var res  = await fetch('https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/image/upload', { method: 'POST', body: fd });
+        var data = await res.json();
+        if (data.secure_url) {
+          results.push({ name: file.name, url: data.secure_url, ok: true });
+        } else {
+          results.push({ name: file.name, error: (data.error ? data.error.message : '失敗'), ok: false });
+        }
+      } catch(e) {
+        results.push({ name: file.name, error: e.message, ok: false });
+      }
+    }
+
+    var ok = results.filter(function(r) { return r.ok; }).length;
+    msgEl.textContent = '✅ 完成：' + ok + '/' + results.length + ' 張成功';
+    msgEl.className = 'message show ' + (ok === results.length ? 'success' : 'info');
+
+    resultsEl.innerHTML = '<table class="data-table" style="margin-top:12px"><thead><tr><th>檔名</th><th>操作</th></tr></thead><tbody>' +
+      results.map(function(r) {
+        if (r.ok) {
+          var safeUrl = r.url.replace(/'/g, "\\'");
+          return '<tr><td>' + r.name + '</td><td><a href="' + r.url + '" target="_blank">預覽</a>&nbsp;&nbsp;<button onclick="navigator.clipboard.writeText(\'' + safeUrl + '\').then(function(){this.textContent=\'已複製✓\';var t=this;setTimeout(function(){t.textContent=\'複製連結\';},1500)}).bind(this)" class="btn btn-sm btn-info" style="padding:3px 10px;font-size:0.8rem">複製連結</button></td></tr>';
+        }
+        return '<tr><td>' + r.name + '</td><td style="color:#e74c3c">❌ ' + r.error + '</td></tr>';
+      }).join('') + '</tbody></table>';
+
+    selectedFiles = [];
+    input.value = '';
+    updateUI();
+    uploadBtn.disabled = false;
+  });
+})();
 
 // --- 單筆記錄作業 ---
 document.getElementById('homeworkForm').addEventListener('submit', async function(e) {
@@ -260,7 +424,7 @@ document.getElementById('homeworkForm').addEventListener('submit', async functio
     completedTime: document.getElementById('completedTime').value || null,
     operator: document.getElementById('operator').value,
     notes: document.getElementById('notes').value,
-    photoUrl: '',
+    photoUrl: await uploadPendingPhoto(),
   };
 
   try {
@@ -274,11 +438,18 @@ document.getElementById('homeworkForm').addEventListener('submit', async functio
       showMessage('formMessage', '✅ ' + data.message, 'success');
       document.getElementById('homeworkItem').value = '';
       document.getElementById('notes').value = '';
+      // 清除照片
+      window._pendingPhotoFile = null;
+      var pi = document.getElementById('photoInput'); if (pi) pi.value = '';
+      var ppi = document.getElementById('photoPreviewImg'); if (ppi) ppi.src = '';
+      var pua = document.getElementById('photoUploadArea');
+      if (pua) { pua.querySelector('.photo-placeholder').style.display = ''; pua.querySelector('.photo-preview').style.display = 'none'; }
+      var ps = document.getElementById('photoStatus'); if (ps) { ps.textContent = ''; ps.className = 'message photo-status'; }
     } else {
       showMessage('formMessage', '❌ ' + (data.error || '發生錯誤'), 'error');
     }
   } catch (err) {
-    showMessage('formMessage', '❌ 網路錯⪓：' + err.message, 'error');
+    showMessage('formMessage', '❌ 網路錯誤：' + err.message, 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<span class="btn-icon">✓</span> 記錄並發送通知';
@@ -483,7 +654,7 @@ async function loadPairingList() {
           '</div>';
       });
 
-      // 新增孩子的下拉選單（無論是否已配對都顯示）
+      // 新增孩子的$��拉選單（無論是否已配對都顯示）
       var addMore =
         '<div class="pair-inline" style="margin-top:' + (isPaired ? '6px' : '0') + ';">' +
         '<select id="pairSel_' + idx + '" class="pair-select">' + studentOpts + '</select>' +
