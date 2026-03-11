@@ -108,24 +108,21 @@
                                       placeholder="可選填備註資訊"></textarea>
                         </div>
 
-                        <!-- 照片上傳 - Google 表單 -->
+                        <!-- 照片上傳 - 直接上傳 -->
                         <div class="form-group">
                             <label>作業照片（選填）</label>
-                            <div class="google-form-photo">
-                                <div class="photo-notice">
-                                    <div class="photo-notice-header">📸 照片上傳注意事項（請務必閱讀）</div>
-                                    <p>感謝您協助提供活動照片！為確保上傳順利，請留意以下說明：</p>
-                                    <ol>
-                                        <li><strong>檔案格式：</strong>支援一般圖片格式（JPG, PNG）及 Apple iPhone 的 HEIC 格式。</li>
-                                        <li><strong>Apple iPhone 使用者須知：</strong>為了避免上傳失敗，上傳時請記得將 Live Photo（原況照片）功能取消。若仍上傳失敗，請嘗試將照片轉存為一般 JPG 後再行$��傳。</li>
-                                        <li><strong>檔案數量與提交方式：</strong>由於系統限制，單次最多可上傳 10 張照片。若您的照片超過 10 張，請分次重新填寫並提交表單即可。</li>
-                                        <li><strong>登入提醒：</strong>系統需登入 Google 帳號以進行檔案上傳，您的帳號資訊僅用於辨識檔案來源，不會外洩。</li>
-                                    </ol>
+                            <div class="photo-upload-area" id="photoUploadArea">
+                                <div class="photo-placeholder">
+                                    <span class="photo-icon">📷</span>
+                                    <span class="photo-hint">點擊選擇或拖曳照片至此</span>
                                 </div>
-                                <a href="https://docs.google.com/forms/d/e/1FAIpQLSeoGwr4mV0ohs0k2dNMPupm9A2o4fgmm6WFoS2sRyN1fEeGVg/viewform" target="_blank" class="btn btn-photo-form">
-                                    <span>📸</span> 點此開啟 Google 表單上傳照片
-                                </a>
+                                <div class="photo-preview" style="display:none">
+                                    <img id="photoPreviewImg" src="" alt="預覽">
+                                    <button type="button" class="photo-remove">×</button>
+                                </div>
                             </div>
+                            <input type="file" id="photoInput" accept="image/*" style="display:none">
+                            <div class="message photo-status" id="photoStatus"></div>
                         </div>
 
                         <button type="submit" class="btn btn-primary">
@@ -151,24 +148,26 @@
                     </div>
                 </div>
 
-                <!-- 批量照片上傳 - Google 表單 -->
+                <!-- 批量照片上傳 -->
                 <div class="card">
                     <h2>📷 批量照片上傳</h2>
-                    <p class="card-desc">請使用 Google 表單上傳照片，照片將自動儲存至雲端硬碟。單次可上傳最多 10 張，超過請分次提交。</p>
-                    <div class="google-form-photo">
-                        <div class="photo-notice">
-                            <div class="photo-notice-header">📸 照片上傳注意事項（請務必閱讀）</div>
-                            <p>感謝您協助提供活動照片！為確保上傳順利，請留意以下說明：</p>
-                            <ol>
-                                <li><strong>檔案格式：</strong>支援一般圖片格式（JPG, PNG）及 Apple iPhone 的 HEIC 格式。</li>
-                                <li><strong>Apple iPhone 使用者須知：</strong>為了避免上傳失敗，上傳時請記得將 Live Photo（原況照片）功能取消。若仍上傳失敗，請嘗試將照片轉存為一般 JPG 後再行$��傳。</li>
-                                <li><strong>檔案數量與提交方式：</strong>由於系統限制，單次最多可上傳 10 張照片。若您的照片超過 10 張，請分次重新填寫並提交表單即可。</li>
-                                <li><strong>登入提醒：</strong>系統需登入 Google 帳號以進行檔案上傳，您的帳號資訊僅用於辨識檔案來源，不會外洩。</li>
-                            </ol>
+                    <p class="card-desc">一次選取多張照片上傳至雲端，上傳完成後可複製連結。</p>
+                    <div class="batch-photo-section">
+                        <div class="photo-upload-area" id="batchPhotoArea">
+                            <div class="photo-placeholder">
+                                <span class="photo-icon">📷</span>
+                                <span class="photo-hint">點擊選擇多張照片（或拖曳至此）</span>
+                            </div>
                         </div>
-                        <a href="https://docs.google.com/forms/d/e/1FAIpQLSeoGwr4mV0ohs0k2dNMPupm9A2o4fgmm6WFoS2sRyN1fEeGVg/viewform" target="_blank" class="btn btn-photo-form">
-                            <span>📸</span> 點此開啟 Google 表單上傳照片
-                        </a>
+                        <input type="file" id="batchPhotoInput" accept="image/*" multiple style="display:none">
+                        <div class="batch-photo-actions">
+                            <button id="batchPhotoUpload" class="btn btn-secondary" disabled>
+                                <span class="btn-icon">📤</span> 上傳所選照片
+                            </button>
+                            <span id="batchPhotoCount" style="color:#666;font-size:0.9rem;align-self:center"></span>
+                        </div>
+                        <div id="batchPhotoMessage" class="message"></div>
+                        <div id="batchPhotoResults"></div>
                     </div>
                 </div>
             </section>
@@ -336,7 +335,7 @@
                     <h2>⚙️ 系統功能</h2>
                     <div class="action-buttons">
                         <button id="sendSummary" class="btn btn-info">
-                            <span class="btn-icon">🍊</span>
+                            <span class="btn-icon">📊</span>
                             發送今日摘要給所有家長
                         </button>
                         <button id="incrementGradeBtn" class="btn btn-warning">
