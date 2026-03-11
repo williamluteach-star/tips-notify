@@ -18,7 +18,7 @@ class DriveService {
       const auth = new google.auth.GoogleAuth({
         credentials: {
           client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-          private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+          private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\n/g, '\n'),
         },
         scopes: [
           'https://www.googleapis.com/auth/spreadsheets',
@@ -36,6 +36,14 @@ class DriveService {
     if (this.folderId) return this.folderId;
     await this.init();
     if (!this.drive) return null;
+
+    // 優先使用環境變數指定的資料夾
+    if (process.env.GOOGLE_DRIVE_FOLDER_ID) {
+      this.folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+      console.log('[Drive] 使用指定資料夾：', this.folderId);
+      return this.folderId;
+    }
+
     try {
       // 查找已存在的 "作業照片" 資料夾
       const res = await this.drive.files.list({
