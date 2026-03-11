@@ -791,21 +791,7 @@ document.getElementById('manualPairForm').addEventListener('submit', async funct
   }
 });
 
-// --- 學期升級 ---
-document.getElementById('incrementGradeBtn').addEventListener('click', async function() {
-  if (!confirm('確定要執行學期升級嗎？\n\n所有學生年級將 +1（1→2, 2→3...），12年級學生將標記為「畢業」。\n\n此操作會直接修改 Google Sheets，請確認後再執行。')) return;
-  this.disabled = true;
-  showMessage('actionMessage', '⏳ 年級升級中...', 'info');
-  try {
-    var res = await fetch('/api/students/increment-grade', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-    var data = await res.json();
-    showMessage('actionMessage', data.success ? '✅ ' + data.message : '❌ ' + (data.error || '發生錯誤'), data.success ? 'success' : 'error');
-  } catch (err) {
-    showMessage('actionMessage', '❌ 網路錯誤：' + err.message, 'error');
-  } finally {
-    this.disabled = false;
-  }
-});
+// 學期升級已移至 Google Sheets Apps Script 自動執行（每年 7/1）
 
 // --- 發送每日摘要 ---
 document.getElementById('sendSummary').addEventListener('click', async function() {
