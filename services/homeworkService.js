@@ -39,7 +39,7 @@ class HomeworkService {
   /**
    * 記錄作業完成
    */
-  async recordHomework({ studentName, homeworkItem, completedTime, operator }) {
+  async recordHomework({ studentName, homeworkItem, completedTime, operator, photoUrl = '' }) {
     if (!this.sheets) {
       await this.init();
     }
@@ -54,7 +54,7 @@ class HomeworkService {
       ? moment(completedTime).format('YYYY-MM-DD HH:mm')
       : moment().format('YYYY-MM-DD HH:mm');
 
-    const values = [[timestamp, studentName, homeworkItem, completedTimeFormatted, operator, '待通知']];
+    const values = [[timestamp, studentName, homeworkItem, completedTimeFormatted, operator, '待通知', '', photoUrl]];
 
     try {
       const response = await this.sheets.spreadsheets.values.append({

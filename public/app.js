@@ -240,6 +240,110 @@ document.getElementById('studentName').addEventListener('change', function() {
   }
 });
 
+// --- 照片上傳 ---
+var pendingPhotoUrl = '';
+
+(function setupPhotoUpload() {
+  var area = document.getElementById('photoUploadArea');
+  var input = document.getElementById('photoInput');
+  var placeholder = document.getElementById('photoPlaceholder');
+  var preview = document.getElementById('photoPreview');
+  var thumb = document.getElementById('photoThumb');
+  var removeBtn = document.getElementById('photoRemove');
+  var status = document.getElementById('photoStatus');
+
+  if (!area) return;
+
+  // 點擊上傳區域觸發 file input
+  area.addEventListener('click', function(e) {
+    if (e.target === removeBtn || removeBtn.contains(e.target)) return;
+    input.click();
+  });
+
+  // 選擇檔案後轉 base64 並預覽
+  input.addEventListener('change', async function() {
+    var file = this.files[0];
+    if (!file) return;
+
+    // 大小限制 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      status.textContent = '❌ 照片超過 10MB，請選擇較小的照片';
+      status.className = 'photo-status error';
+      input.value = '';
+      return;
+    }
+
+    // 讀取為 base64
+    var reader = new FileReader();
+    reader.onload = function(evt) {
+      var dataUrl = evt.target.result;
+      // 顯示預覽
+      thumb.src = dataUrl;
+      placeholder.style.display = 'none';
+      preview.style.display = 'flex';
+      status.textContent = '📷 ' + file.name + ' 已選取，提交時自動上傳';
+      status.className = 'photo-status info';
+      pendingPhotoUrl = '';  // 待上傳，尚未取得 Drive URL
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // 移除照片
+  removeBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    input.value = '';
+    thumb.src = '';
+    placeholder.style.display = 'flex';
+    preview.style.display = 'none';
+    status.textContent = '';
+    status.className = 'photo-status';
+    pendingPhotoUrl = '';
+  });
+})();
+
+async function uploadPendingPhoto() {
+  var input = document.getElementById('photoInput');
+  var status = document.getElementById('photoStatus');
+  var file = input && input.files[0];
+  if (!file) return '';
+
+  status.textContent = '⏳ 上傳照片中...';
+  status.className = 'photo-status info';
+
+  try {
+    // 讀取 base64（去掉 data:mime;base64, 前綴）
+    var base64 = await new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var result = e.target.result;
+        resolve(result.split(',')[1]);  // 只要 base64 部分
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    var res = await fetch('/api/upload-photo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64: base64, mimeType: file.type, fileName: file.name }),
+    });
+    var data = await res.json();
+    if (data.success && data.viewUrl) {
+      status.textContent = '✅ 照片上傳成功';
+      status.className = 'photo-status success';
+      return data.viewUrl;
+    } else {
+      status.textContent = '⚠️ 照片上傳失敗，將跳過照片';
+      status.className = 'photo-status error';
+      return '';
+    }
+  } catch (e) {
+    status.textContent = '⚠️ 照片上傳失敗（' + e.message + '），將跳過照片';
+    status.className = 'photo-status error';
+    return '';
+  }
+}
+
 // --- 單筆記錄作業 ---
 document.getElementById('homeworkForm').addEventListener('submit', async function(e) {
   e.preventDefault();
@@ -247,12 +351,20 @@ document.getElementById('homeworkForm').addEventListener('submit', async functio
   btn.disabled = true;
   btn.textContent = '處理中...';
 
+  // 先上傳照片（若有）
+  var photoUrl = '';
+  var photoInput = document.getElementById('photoInput');
+  if (photoInput && photoInput.files && photoInput.files[0]) {
+    photoUrl = await uploadPendingPhoto();
+  }
+
   const payload = {
     studentName: document.getElementById('studentName').value,
     homeworkItem: document.getElementById('homeworkItem').value,
     completedTime: document.getElementById('completedTime').value || null,
     operator: document.getElementById('operator').value,
     notes: document.getElementById('notes').value,
+    photoUrl: photoUrl || '',
   };
 
   try {
@@ -266,6 +378,13 @@ document.getElementById('homeworkForm').addEventListener('submit', async functio
       showMessage('formMessage', '✅ ' + data.message, 'success');
       document.getElementById('homeworkItem').value = '';
       document.getElementById('notes').value = '';
+      // 清除照片
+      document.getElementById('photoInput').value = '';
+      document.getElementById('photoThumb').src = '';
+      document.getElementById('photoPlaceholder').style.display = 'flex';
+      document.getElementById('photoPreview').style.display = 'none';
+      document.getElementById('photoStatus').textContent = '';
+      pendingPhotoUrl = '';
     } else {
       showMessage('formMessage', '❌ ' + (data.error || '發生錯誤'), 'error');
     }

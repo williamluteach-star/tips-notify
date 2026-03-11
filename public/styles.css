@@ -928,6 +928,93 @@ body {
 
 .line-link:hover { text-decoration: underline; }
 
+/* =========================================
+   照片上傳區塊
+   ========================================= */
+.photo-upload-area {
+    border: 2px dashed #d0d7e3;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: #f9fafb;
+    overflow: hidden;
+    user-select: none;
+}
+
+.photo-upload-area:hover {
+    border-color: #667eea;
+    background: #f3f4ff;
+}
+
+.photo-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 28px 20px;
+}
+
+.photo-icon {
+    font-size: 2.2rem;
+    line-height: 1;
+}
+
+.photo-hint {
+    font-size: 0.9rem;
+    color: #888;
+}
+
+.photo-preview {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+}
+
+.photo-preview img {
+    max-width: 100%;
+    max-height: 180px;
+    border-radius: 8px;
+    object-fit: contain;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.photo-remove {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,0.55);
+    color: white;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    transition: background 0.15s;
+}
+
+.photo-remove:hover {
+    background: rgba(220,50,50,0.85);
+}
+
+.photo-status {
+    padding: 6px 12px;
+    font-size: 0.82rem;
+    min-height: 0;
+    transition: all 0.2s;
+}
+
+.photo-status.info    { color: #2980b9; }
+.photo-status.success { color: #27ae60; }
+.photo-status.error   { color: #e74c3c; }
+
 /* ---- 響應式 ---- */
 @media (max-width: 600px) {
     .form-row { grid-template-columns: 1fr; }

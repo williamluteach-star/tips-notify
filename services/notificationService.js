@@ -42,7 +42,7 @@ class NotificationService {
   /**
    * 通知家長作業完成（支援多位家長同時收到）
    */
-  async notifyParent(studentName, homeworkItem, completedTime) {
+  async notifyParent(studentName, homeworkItem, completedTime, photoUrl) {
     if (!client) {
       console.warn('LINE Bot 未設定，跳過通知發送');
       return { success: false, message: 'LINE Bot 未設定（預覽模式）' };
@@ -70,11 +70,14 @@ class NotificationService {
         ? moment(completedTime).format('YYYY年MM月DD日 HH:mm')
         : moment().format('YYYY年MM月DD日 HH:mm');
 
-      // 建立訊息
-      const message = {
-        type: 'text',
-        text: `🎉 作業完成通知 🎉\n\n👦 ${studentName} 已完成以下作業：\n\n📚 ${homeworkItem}\n\n⏰ 完成時間：${timeFormatted}\n\n✅ 繼續加油！感謝您的關注 🙏`,
-      };
+      // 建立訊息（有照片則附上連結）
+      let messageText = `🎉 作業完成通知 🎉\n\n👦 ${studentName} 已完成以下作業：\n\n📚 ${homeworkItem}\n\n⏰ 完成時間：${timeFormatted}`;
+      if (photoUrl) {
+        messageText += `\n\n📷 作業照片：\n${photoUrl}`;
+      }
+      messageText += `\n\n✅ 繼續加油！感謝您的關注 🙏`;
+
+      const message = { type: 'text', text: messageText };
 
       // 發送給所有配對的家長
       const results = [];

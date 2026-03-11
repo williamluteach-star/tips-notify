@@ -1,5 +1,6 @@
 const express = require('express');
 const line = require('@line/bot-sdk');
+const driveService = require('./services/driveService');
 require('dotenv').config();
 
 const config = {
@@ -174,9 +175,24 @@ async function handleFollow(event) {
 }
 
 // API: 記錄作業完成（供工讀生使用）
+// API：上傳照片到 Google Drive（接收 base64）
+app.post('/api/upload-photo', async (req, res) => {
+  try {
+    const { base64, mimeType, fileName } = req.body;
+    if (!base64 || !mimeType) return res.status(400).json({ error: '缺少照片資料' });
+    // 限制 10MB（base64 約 1.37 倍原始大小）
+    if (base64.length > 14 * 1024 * 1024) return res.status(400).json({ error: '照片超過 10MB 限制' });
+    const result = await driveService.uploadPhoto(base64, mimeType, fileName || 'photo.jpg');
+    res.json({ success: true, ...result });
+  } catch (e) {
+    console.error('[upload-photo]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 app.post('/api/homework', async (req, res) => {
   try {
-    const { studentName, homeworkItem, completedTime, operator } = req.body;
+    const { studentName, homeworkItem, completedTime, operator, photoUrl } = req.body;
 
     if (!studentName || !homeworkItem) {
       return res.status(400).json({ error: '缺少必要欄位：學生姓名、作業項目' });
@@ -190,6 +206,7 @@ app.post('/api/homework', async (req, res) => {
         homeworkItem,
         completedTime: completedTime || new Date().toISOString(),
         operator: operator || '系統',
+        photoUrl: photoUrl || '',
       });
     } catch (error) {
       // 如果 Google Sheets 未設定，返回模擬成功
@@ -212,7 +229,7 @@ app.post('/api/homework', async (req, res) => {
     // 發送通知給家長
     let notifyResult = null;
     try {
-      notifyResult = await notificationService.notifyParent(studentName, homeworkItem, completedTime);
+      notifyResult = await notificationService.notifyParent(studentName, homeworkItem, completedTime, photoUrl);
     } catch (error) {
       console.warn('發送通知失敗:', error.message);
       notifyResult = { success: false, message: error.message };

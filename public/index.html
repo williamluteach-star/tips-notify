@@ -108,6 +108,23 @@
                                       placeholder="可選填備註資訊"></textarea>
                         </div>
 
+                        <!-- 照片上傳 -->
+                        <div class="form-group">
+                            <label>作業照片（選填）</label>
+                            <div class="photo-upload-area" id="photoUploadArea">
+                                <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
+                                <div class="photo-placeholder" id="photoPlaceholder">
+                                    <span class="photo-icon">📷</span>
+                                    <span class="photo-hint">點此拍照或選擇照片</span>
+                                </div>
+                                <div class="photo-preview" id="photoPreview" style="display:none">
+                                    <img id="photoThumb" src="" alt="照片預覽">
+                                    <button type="button" class="photo-remove" id="photoRemove">✕</button>
+                                </div>
+                                <div class="photo-status" id="photoStatus"></div>
+                            </div>
+                        </div>
+
                         <button type="submit" class="btn btn-primary">
                             <span class="btn-icon">✓</span>
                             記錄並發送通知
