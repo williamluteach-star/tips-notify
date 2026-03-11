@@ -11,7 +11,6 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans TC', 'PingFang TC', sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
-      min-height: -webkit-fill-available;
       padding: 24px 16px 40px;
     }
 
@@ -60,15 +59,9 @@
     .field input[type="text"]::placeholder { color: #bbb; }
 
     /* ── Hidden file input ── */
-    /* Always hidden — triggered by <label for="photoInput"> */
-    #photoInput {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      opacity: 0;
-      overflow: hidden;
-      pointer-events: none;
-    }
+    /* display:none is the safest cross-browser way to hide it;
+       <label for="photoInput"> still opens the picker reliably */
+    #photoInput { display: none; }
 
     /* ── Photo upload area (now a <label>) ── */
     .photo-area {
@@ -215,9 +208,6 @@
 </head>
 <body>
 
-<!-- Hidden file input — triggered by <label for="photoInput"> elements -->
-<input type="file" id="photoInput" accept="image/*">
-
 <div class="card">
 
   <!-- ═══ FORM SECTION ═══ -->
@@ -240,6 +230,9 @@
 
     <div class="field">
       <span class="field-label">作業照片<span class="required">*</span></span>
+
+      <!-- Hidden file input: display:none is safe; label triggers it natively on all browsers -->
+      <input type="file" id="photoInput" accept="image/*">
 
       <!-- photo-area is a <label> — tapping it natively opens the file picker on iOS -->
       <label class="photo-area" id="photoArea" for="photoInput">
