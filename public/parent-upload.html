@@ -11,6 +11,7 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans TC', 'PingFang TC', sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
+      min-height: -webkit-fill-available;
       padding: 24px 16px 40px;
     }
 
@@ -33,14 +34,15 @@
 
     /* ── Form fields ── */
     .field { margin-bottom: 20px; }
-    .field label {
+    /* Use .field-label so photo-area <label> is not affected */
+    .field-label {
       display: block;
       font-size: 0.9rem;
       font-weight: 600;
       color: #444;
       margin-bottom: 8px;
     }
-    .field label .required { color: #e74c3c; margin-left: 2px; }
+    .field-label .required { color: #e74c3c; margin-left: 2px; }
 
     .field input[type="text"] {
       width: 100%;
@@ -51,28 +53,39 @@
       color: #333;
       transition: border-color 0.2s;
       outline: none;
+      -webkit-appearance: none;
       appearance: none;
     }
     .field input[type="text"]:focus { border-color: #667eea; }
     .field input[type="text"]::placeholder { color: #bbb; }
 
-    /* ── Photo upload area ── */
+    /* ── Hidden file input ── */
+    /* Always hidden — triggered by <label for="photoInput"> */
+    #photoInput {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    /* ── Photo upload area (now a <label>) ── */
     .photo-area {
+      display: block;          /* <label> is inline by default */
       border: 2.5px dashed #d0d0d0;
       border-radius: 16px;
       padding: 30px 20px;
       text-align: center;
       cursor: pointer;
       transition: border-color 0.2s, background 0.2s;
-      position: relative;
       background: #fafafa;
       user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
     }
     .photo-area:active { background: #f0f0f8; }
     .photo-area.has-photo { border-color: #667eea; background: #f0f0ff; padding: 16px; }
-    .photo-area input[type="file"] {
-      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
-    }
     .photo-area .upload-icon { font-size: 2.4rem; margin-bottom: 10px; }
     .photo-area .upload-text { font-size: 0.95rem; color: #666; line-height: 1.5; }
     .photo-area .upload-hint { font-size: 0.8rem; color: #aaa; margin-top: 6px; }
@@ -85,19 +98,24 @@
       border-radius: 10px;
       display: none;
       margin-bottom: 10px;
+      pointer-events: none;
     }
     .preview-info {
       font-size: 0.82rem;
       color: #888;
       text-align: center;
     }
-    .change-photo-btn {
-      display: inline-block;
-      margin-top: 8px;
+
+    /* ── "重新選擇" — a <label> outside the photo-area ── */
+    .change-photo-lbl {
+      display: none;           /* shown via JS after photo selected */
+      text-align: center;
+      margin-top: 10px;
       font-size: 0.85rem;
       color: #667eea;
       cursor: pointer;
       text-decoration: underline;
+      touch-action: manipulation;
     }
 
     /* ── Submit button ── */
@@ -114,6 +132,9 @@
       margin-top: 8px;
       transition: opacity 0.2s, transform 0.1s;
       letter-spacing: 0.03em;
+      -webkit-appearance: none;
+      appearance: none;
+      touch-action: manipulation;
     }
     #submitBtn:active { transform: scale(0.98); }
     #submitBtn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
@@ -169,6 +190,9 @@
       cursor: pointer;
       border: none;
       transition: background 0.2s;
+      -webkit-appearance: none;
+      appearance: none;
+      touch-action: manipulation;
     }
     .send-another-btn:active { background: #e8e8f4; }
 
@@ -191,6 +215,9 @@
 </head>
 <body>
 
+<!-- Hidden file input — triggered by <label for="photoInput"> elements -->
+<input type="file" id="photoInput" accept="image/*">
+
 <div class="card">
 
   <!-- ═══ FORM SECTION ═══ -->
@@ -202,19 +229,20 @@
     </div>
 
     <div class="field">
-      <label>學生姓名<span class="required">*</span></label>
+      <span class="field-label">學生姓名<span class="required">*</span></span>
       <input type="text" id="studentName" placeholder="請輸入孩子的姓名" autocomplete="off" inputmode="text">
     </div>
 
     <div class="field">
-      <label>作業科目<span class="required">*</span></label>
+      <span class="field-label">作業科目<span class="required">*</span></span>
       <input type="text" id="subject" placeholder="例如：數學、國語、英文、自然…" autocomplete="off" inputmode="text">
     </div>
 
     <div class="field">
-      <label>作業照片<span class="required">*</span></label>
-      <div class="photo-area" id="photoArea">
-        <input type="file" id="photoInput" accept="image/*" capture="environment">
+      <span class="field-label">作業照片<span class="required">*</span></span>
+
+      <!-- photo-area is a <label> — tapping it natively opens the file picker on iOS -->
+      <label class="photo-area" id="photoArea" for="photoInput">
         <img id="previewImg" src="" alt="預覽">
         <div id="uploadPrompt">
           <div class="upload-icon">📷</div>
@@ -223,9 +251,11 @@
         </div>
         <div id="previewMeta" style="display:none;">
           <div class="preview-info" id="previewInfoText"></div>
-          <span class="change-photo-btn" id="changePhotoBtn">重新選擇</span>
         </div>
-      </div>
+      </label>
+
+      <!-- "重新選擇" — also a <label>, shown after photo selected -->
+      <label class="change-photo-lbl" id="changePhotoLbl" for="photoInput">重新選擇</label>
     </div>
 
     <div class="divider"></div>
@@ -252,7 +282,7 @@
     <div class="success-icon">✅</div>
     <div class="success-title">已成功送出！</div>
     <div class="success-subtitle" id="successMsg">老師已收到通知，<br>感謝您的配合 🙏</div>
-    <img id="successThumb" src="" alt="已上傳的照片">
+    <img id="successThumb" src="" alt="已上傳的照片" style="display:none;">
     <button class="send-another-btn" id="sendAnotherBtn">再送一份</button>
   </div>
 
@@ -262,32 +292,32 @@
 // ─────────────────────────────────────────────
 // Cloudinary config
 // ─────────────────────────────────────────────
-var CLOUD_NAME   = 'dpqjusupf';
+var CLOUD_NAME    = 'dpqjusupf';
 var UPLOAD_PRESET = 'TIPS-homework report';
 
 // ─────────────────────────────────────────────
 // DOM refs
 // ─────────────────────────────────────────────
-var photoInput    = document.getElementById('photoInput');
-var photoArea     = document.getElementById('photoArea');
-var uploadPrompt  = document.getElementById('uploadPrompt');
-var previewImg    = document.getElementById('previewImg');
-var previewMeta   = document.getElementById('previewMeta');
-var previewInfoTx = document.getElementById('previewInfoText');
-var changePhotoBtn= document.getElementById('changePhotoBtn');
-var submitBtn     = document.getElementById('submitBtn');
-var errorMsg      = document.getElementById('errorMsg');
-var formSection   = document.getElementById('formSection');
-var progressSec   = document.getElementById('progressSection');
-var successSec    = document.getElementById('successSection');
-var progressBar   = document.getElementById('progressBar');
-var progressPct   = document.getElementById('progressPercent');
-var progressLabel = document.getElementById('progressLabel');
-var sendAnotherBtn= document.getElementById('sendAnotherBtn');
-var successThumb  = document.getElementById('successThumb');
-var successMsg    = document.getElementById('successMsg');
+var photoInput     = document.getElementById('photoInput');
+var photoArea      = document.getElementById('photoArea');
+var uploadPrompt   = document.getElementById('uploadPrompt');
+var previewImg     = document.getElementById('previewImg');
+var previewMeta    = document.getElementById('previewMeta');
+var previewInfoTx  = document.getElementById('previewInfoText');
+var changePhotoLbl = document.getElementById('changePhotoLbl');
+var submitBtn      = document.getElementById('submitBtn');
+var errorMsg       = document.getElementById('errorMsg');
+var formSection    = document.getElementById('formSection');
+var progressSec    = document.getElementById('progressSection');
+var successSec     = document.getElementById('successSection');
+var progressBar    = document.getElementById('progressBar');
+var progressPct    = document.getElementById('progressPercent');
+var progressLabel  = document.getElementById('progressLabel');
+var sendAnotherBtn = document.getElementById('sendAnotherBtn');
+var successThumb   = document.getElementById('successThumb');
+var successMsg     = document.getElementById('successMsg');
 
-var selectedFile  = null;
+var selectedFile = null;
 
 // ─────────────────────────────────────────────
 // Photo selection & preview
@@ -296,7 +326,6 @@ photoInput.addEventListener('change', function(e) {
   var file = e.target.files[0];
   if (!file) return;
 
-  // Warn if raw file is enormous (> 50 MB)
   if (file.size > 50 * 1024 * 1024) {
     showError('照片太大（超過 50MB），請選擇較小的檔案。');
     return;
@@ -305,7 +334,6 @@ photoInput.addEventListener('change', function(e) {
   selectedFile = file;
   hideError();
 
-  // Show preview
   var reader = new FileReader();
   reader.onload = function(ev) {
     previewImg.src = ev.target.result;
@@ -313,6 +341,7 @@ photoInput.addEventListener('change', function(e) {
     uploadPrompt.style.display = 'none';
     previewMeta.style.display = 'block';
     photoArea.classList.add('has-photo');
+    changePhotoLbl.style.display = 'block';
 
     var sizeKB = Math.round(file.size / 1024);
     var sizeStr = sizeKB > 1024 ? (sizeKB / 1024).toFixed(1) + ' MB' : sizeKB + ' KB';
@@ -324,12 +353,10 @@ photoInput.addEventListener('change', function(e) {
   reader.readAsDataURL(file);
 });
 
-// "重新選擇" — trigger file input without propagating to the area
-changePhotoBtn.addEventListener('click', function(e) {
-  e.stopPropagation();
-  // Detach file input from photo area click during manual trigger
+// "重新選擇" label — reset value so the same file can be re-selected
+changePhotoLbl.addEventListener('click', function() {
   photoInput.value = '';
-  photoInput.click();
+  // Default <label for="photoInput"> behaviour opens the file picker
 });
 
 // ─────────────────────────────────────────────
@@ -352,14 +379,12 @@ function compressImage(file) {
         var canvas = document.createElement('canvas');
         canvas.width  = w;
         canvas.height = h;
-        var ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
         canvas.toBlob(function(blob) {
-          // If compressed is larger than original, use original
-          resolve(blob.size < file.size ? blob : file);
+          resolve(blob && blob.size < file.size ? blob : file);
         }, 'image/jpeg', quality);
       };
-      img.onerror = function() { resolve(file); }; // fallback to original
+      img.onerror = function() { resolve(file); };
       img.src = e.target.result;
     };
     reader.onerror = function() { resolve(file); };
@@ -416,7 +441,7 @@ function notifyTeacher(studentName, subject, photoUrl) {
 // ─────────────────────────────────────────────
 // Submit
 // ─────────────────────────────────────────────
-submitBtn.addEventListener('click', async function() {
+submitBtn.addEventListener('click', function() {
   var name    = document.getElementById('studentName').value.trim();
   var subject = document.getElementById('subject').value.trim();
 
@@ -440,47 +465,41 @@ submitBtn.addEventListener('click', async function() {
   showSection('progress');
   setProgress(0, '壓縮照片中…');
 
-  try {
-    // 1. Compress
-    var compressed = await compressImage(selectedFile);
-    var compKB = Math.round(compressed.size / 1024);
-    setProgress(10, '上傳中…');
-
-    // 2. Upload to Cloudinary
-    var uploadResult = await uploadToCloudinary(compressed, function(pct) {
-      setProgress(10 + Math.round(pct * 0.8), '上傳中… ' + pct + '%');
+  // Use Promise chain (no async/await) for maximum compatibility
+  compressImage(selectedFile)
+    .then(function(compressed) {
+      setProgress(10, '上傳中…');
+      return uploadToCloudinary(compressed, function(pct) {
+        setProgress(10 + Math.round(pct * 0.8), '上傳中… ' + pct + '%');
+      });
+    })
+    .then(function(uploadResult) {
+      setProgress(92, '通知老師中…');
+      var photoUrl = uploadResult.secure_url;
+      return notifyTeacher(name, subject, photoUrl).then(function(notifyResult) {
+        return { photoUrl: photoUrl, notifyResult: notifyResult };
+      });
+    })
+    .then(function(result) {
+      setProgress(100, '完成！');
+      setTimeout(function() {
+        successThumb.src = result.photoUrl;
+        successThumb.style.display = 'block';
+        successMsg.innerHTML = (result.notifyResult && result.notifyResult.notified)
+          ? '老師已收到通知，<br>感謝您的配合 🙏'
+          : '照片已成功上傳，<br>感謝您的配合 🙏';
+        showSection('success');
+      }, 400);
+    })
+    .catch(function(err) {
+      showSection('form');
+      submitBtn.disabled = false;
+      showError('❌ ' + (err.message || '上傳失敗，請再試一次。'));
     });
-    setProgress(92, '通知老師中…');
-
-    var photoUrl = uploadResult.secure_url;
-
-    // 3. Notify teacher
-    var notifyResult = await notifyTeacher(name, subject, photoUrl);
-    setProgress(100, '完成！');
-
-    // 4. Show success
-    setTimeout(function() {
-      successThumb.src = photoUrl;
-      successThumb.style.display = 'block';
-
-      if (notifyResult && notifyResult.notified) {
-        successMsg.innerHTML = '老師已收到通知，<br>感謝您的配合 🙏';
-      } else {
-        successMsg.innerHTML = '照片已成功上傳，<br>感謝您的配合 🙏';
-      }
-
-      showSection('success');
-    }, 400);
-
-  } catch(err) {
-    showSection('form');
-    submitBtn.disabled = false;
-    showError('❌ ' + (err.message || '上傳失敗，請再試一次。'));
-  }
 });
 
 // ─────────────────────────────────────────────
-// "再送一份" button — reset everything
+// "再送一份" — reset everything
 // ─────────────────────────────────────────────
 sendAnotherBtn.addEventListener('click', function() {
   document.getElementById('studentName').value = '';
@@ -491,9 +510,12 @@ sendAnotherBtn.addEventListener('click', function() {
   previewImg.style.display = 'none';
   uploadPrompt.style.display = '';
   previewMeta.style.display = 'none';
+  changePhotoLbl.style.display = 'none';
   photoArea.classList.remove('has-photo');
   submitBtn.disabled = true;
   submitBtn.textContent = '選擇照片後即可送出';
+  successThumb.src = '';
+  successThumb.style.display = 'none';
   setProgress(0, '');
   hideError();
   showSection('form');
@@ -503,9 +525,9 @@ sendAnotherBtn.addEventListener('click', function() {
 // Helpers
 // ─────────────────────────────────────────────
 function showSection(name) {
-  formSection.style.display     = name === 'form'     ? '' : 'none';
-  progressSec.style.display     = name === 'progress' ? '' : 'none';
-  successSec.style.display      = name === 'success'  ? '' : 'none';
+  formSection.style.display  = name === 'form'     ? '' : 'none';
+  progressSec.style.display  = name === 'progress' ? '' : 'none';
+  successSec.style.display   = name === 'success'  ? '' : 'none';
 }
 
 function setProgress(pct, label) {
