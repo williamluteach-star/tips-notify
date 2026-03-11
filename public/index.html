@@ -347,6 +347,37 @@
                     <div id="actionMessage" class="message"></div>
                 </div>
 
+                <!-- 家長作業上傳連結 -->
+                <div class="card">
+                    <h2>📲 家長作業上傳</h2>
+                    <p class="card-desc">將以下連結傳給家長，讓家長自行上傳孩子的作業照片。</p>
+
+                    <div class="info-item" style="margin-bottom:14px; align-items:center; flex-wrap:wrap; gap:10px">
+                        <span class="info-label">上傳連結</span>
+                        <span class="info-value" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                            <a id="parentUploadLink" href="#" target="_blank" class="line-link" style="font-size:0.93rem; word-break:break-all">載入中...</a>
+                            <button id="copyParentUrl" class="btn btn-secondary btn-sm">📋 複製連結</button>
+                        </span>
+                    </div>
+
+                    <div style="margin-top:4px">
+                        <div class="info-label" style="margin-bottom:10px">📝 建議通知訊息（可直接複製傳給家長）</div>
+                        <div id="reminderTextBox" style="
+                            background:#f9f9fb;
+                            border:1.5px solid #e8e8ee;
+                            border-radius:12px;
+                            padding:16px 18px;
+                            font-size:0.9rem;
+                            line-height:1.85;
+                            color:#333;
+                            white-space:pre-wrap;
+                            word-break:break-word;
+                        "></div>
+                        <button id="copyReminder" class="btn btn-secondary btn-sm" style="margin-top:10px">📋 複製訊息</button>
+                        <span id="copyReminderDone" style="display:none; margin-left:10px; color:#27ae60; font-size:0.88rem">✅ 已複製！</span>
+                    </div>
+                </div>
+
                 <div class="card">
                     <h2>🔗 系統資訊</h2>
                     <div class="info-grid">

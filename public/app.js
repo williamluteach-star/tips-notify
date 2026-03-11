@@ -838,6 +838,58 @@ async function checkServerStatus() {
   }
   document.getElementById('webhookUrl').textContent = window.location.origin + '/webhook';
 
+  // 家長上傳連結
+  const parentUrl = window.location.origin + '/parent-upload';
+  const linkEl = document.getElementById('parentUploadLink');
+  if (linkEl) {
+    linkEl.textContent = parentUrl;
+    linkEl.href = parentUrl;
+  }
+
+  // 填入建議通知訊息（含動態連結）
+  const reminderBox = document.getElementById('reminderTextBox');
+  if (reminderBox) {
+    reminderBox.textContent =
+`各位家長您好 🙏
+
+非常感謝您長期以來對孩子學習的支持與配合！
+
+說實在的，孩子在課堂上的吸收狀況，有時候不一定能讓老師完全掌握，我們也在持續調整教學方式，希望能讓每一位孩子都跟得上進度。也正因為如此，課後的練習與作業就更加重要——這是鞏固當天所學、讓觀念真正內化最有效的方式。
+
+為了讓老師能及時確認孩子有確實完成作業，🙏 麻煩您在孩子完成作業後，透過以下連結上傳一張作業照片：
+
+📸 ${parentUrl}
+
+上傳後老師會立即收到通知。請在當天晚上 10 點前完成上傳，讓我們能在下次上課前提前掌握每位孩子的學習狀況。
+
+準時繳交作業，是培養孩子責任感與學習習慣最直接的方式，也是對自己努力最好的肯定。謝謝您的配合與信任，我們一起努力！💪
+
+TIPS 英典教育 敬上`;
+  }
+
+  // 複製連結按鈕
+  const copyUrlBtn = document.getElementById('copyParentUrl');
+  if (copyUrlBtn) {
+    copyUrlBtn.onclick = function() {
+      navigator.clipboard.writeText(parentUrl).then(function() {
+        copyUrlBtn.textContent = '✅ 已複製！';
+        setTimeout(function() { copyUrlBtn.textContent = '📋 複製連結'; }, 2000);
+      });
+    };
+  }
+
+  // 複製訊息按鈕
+  const copyReminderBtn = document.getElementById('copyReminder');
+  const copyReminderDone = document.getElementById('copyReminderDone');
+  if (copyReminderBtn && reminderBox) {
+    copyReminderBtn.onclick = function() {
+      navigator.clipboard.writeText(reminderBox.textContent).then(function() {
+        copyReminderDone.style.display = 'inline';
+        setTimeout(function() { copyReminderDone.style.display = 'none'; }, 2500);
+      });
+    };
+  }
+
   // 載入 LINE Bot 資訊
   loadBotInfo();
 }
