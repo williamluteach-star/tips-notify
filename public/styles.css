@@ -756,7 +756,7 @@ body {
 
 .form-group select:focus { outline: none; border-color: #667eea; }
 
-/* ---- 訊息（確保有內容時才顯示） ---- */
+/* ---- 袪息（確保有內容時才顯示） ---- */
 .message:empty { display: none; }
 .message:not(:empty) { display: block; }
 
@@ -955,7 +955,68 @@ body {
 .btn-warning:hover { filter: brightness(1.08); }
 
 /* =========================================
-   照片上傳區塊
+   Google 表單照片上傳區塊
+   ========================================= */
+.google-form-photo {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.photo-notice {
+    background: #fffbe6;
+    border: 1px solid #ffe58f;
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 0.88rem;
+    color: #5a4500;
+    line-height: 1.6;
+}
+
+.photo-notice-header {
+    font-weight: 700;
+    font-size: 0.93rem;
+    margin-bottom: 8px;
+    color: #8b6000;
+}
+
+.photo-notice p {
+    margin: 0 0 8px 0;
+}
+
+.photo-notice ol {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.photo-notice ol li {
+    margin-bottom: 5px;
+}
+
+.btn-photo-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #34a853, #1e8e3e);
+    color: white !important;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 22px;
+    font-size: 0.97rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: filter 0.18s;
+    align-self: flex-start;
+}
+
+.btn-photo-form:hover {
+    filter: brightness(1.08);
+    text-decoration: none;
+}
+
+/* =========================================
+   舊照片上傳區塊（保留 CSS 避免 JS 參照錯誤）
    ========================================= */
 .photo-upload-area {
     border: 2px dashed #d0d7e3;
