@@ -583,6 +583,63 @@ app.post('/api/director-login', (req, res) => {
   }
 });
 
+// API: 家長上傳作業照片後通知老師
+// 前端直接上傳到 Cloudinary，完成後呼叫此端點讓 bot 推播給老師
+app.post('/api/parent-notify', async (req, res) => {
+  try {
+    const { studentName, subject, photoUrl, uploadTime } = req.body;
+    if (!studentName || !photoUrl) {
+      return res.status(400).json({ error: '缺少必要欄位（studentName、photoUrl）' });
+    }
+
+    // 格式化上傳時間（台灣時區）
+    const time = uploadTime
+      ? new Date(uploadTime).toLocaleString('zh-TW', {
+          timeZone: 'Asia/Taipei',
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit',
+        })
+      : new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+
+    const subjectStr = subject || '未填寫';
+
+    // 印 log，不管有沒有設定 LINE 都記錄下來
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📸 家長上傳作業照片');
+    console.log(`   學生：${studentName}`);
+    console.log(`   科目：${subjectStr}`);
+    console.log(`   時間：${time}`);
+    console.log(`   照片：${photoUrl}`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    const teacherLineId = process.env.TEACHER_LINE_USER_ID;
+
+    if (!client || !teacherLineId) {
+      console.warn('[parent-notify] LINE 未設定或 TEACHER_LINE_USER_ID 未設定，跳過通知');
+      return res.json({
+        success: true,
+        notified: false,
+        message: '照片已上傳，老師通知功能尚未設定（TEACHER_LINE_USER_ID）',
+      });
+    }
+
+    const messageText =
+      `📸 【家長上傳作業照片】\n\n` +
+      `👦 學生：${studentName}\n` +
+      `📚 科目：${subjectStr}\n` +
+      `⏰ 上傳時間：${time}\n\n` +
+      `📷 查看照片：\n${photoUrl}`;
+
+    await client.pushMessage(teacherLineId, { type: 'text', text: messageText });
+    console.log(`[parent-notify] ✅ 已通知老師（${teacherLineId}）`);
+
+    res.json({ success: true, notified: true, message: '已通知老師' });
+  } catch (e) {
+    console.error('[parent-notify] 錯誤:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // 健康檢查
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
