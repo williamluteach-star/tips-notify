@@ -108,20 +108,23 @@
                                       placeholder="可選填備註資訊"></textarea>
                         </div>
 
-                        <!-- 照片上傳 -->
+                        <!-- 照片上傳 - Google 表單 -->
                         <div class="form-group">
                             <label>作業照片（選填）</label>
-                            <div class="photo-upload-area" id="photoUploadArea">
-                                <input type="file" id="photoInput" accept="image/jpeg,image/png,image/heic,image/heif,.heic,.heif,image/*" style="display:none">
-                                <div class="photo-placeholder" id="photoPlaceholder">
-                                    <span class="photo-icon">📷</span>
-                                    <span class="photo-hint">點此拍照或選擇照片</span>
+                            <div class="google-form-photo">
+                                <div class="photo-notice">
+                                    <div class="photo-notice-header">📸 照片上傳注意事項（請務必閱讀）</div>
+                                    <p>感謝您協助提供活動照片！為確保上傳順利，請留意以下說明：</p>
+                                    <ol>
+                                        <li><strong>檔案格式：</strong>支援一般圖片格式（JPG, PNG）及 Apple iPhone 的 HEIC 格式。</li>
+                                        <li><strong>Apple iPhone 使用者須知：</strong>為了避免上傳失敗，上傳時請記得將 Live Photo（原況照片）功能取消。若仍上傳失敗，請嘗試將照片轉存為一般 JPG 後再行$��傳。</li>
+                                        <li><strong>檔案數量與提交方式：</strong>由於系統限制，單次最多可上傳 10 張照片。若您的照片超過 10 張，請分次重新填寫並提交表單即可。</li>
+                                        <li><strong>登入提醒：</strong>系統需登入 Google 帳號以進行檔案上傳，您的帳號資訊僅用於辨識檔案來源，不會外洩。</li>
+                                    </ol>
                                 </div>
-                                <div class="photo-preview" id="photoPreview" style="display:none">
-                                    <img id="photoThumb" src="" alt="照片預覽">
-                                    <button type="button" class="photo-remove" id="photoRemove">✕</button>
-                                </div>
-                                <div class="photo-status" id="photoStatus"></div>
+                                <a href="https://docs.google.com/forms/d/e/1FAIpQLSeoGwr4mV0ohs0k2dNMPupm9A2o4fgmm6WFoS2sRyN1fEeGVg/viewform" target="_blank" class="btn btn-photo-form">
+                                    <span>📸</span> 點此開啟 Google 表單上傳照片
+                                </a>
                             </div>
                         </div>
 
@@ -148,38 +151,24 @@
                     </div>
                 </div>
 
-                <!-- 批量照片上傳 -->
+                <!-- 批量照片上傳 - Google 表單 -->
                 <div class="card">
                     <h2>📷 批量照片上傳</h2>
-                    <p class="card-desc">選擇多張照片，<strong>檔名含孩子名字</strong>（如：<code>張小明.jpg</code>、<code>李小花_作業.jpg</code>），系統自動比對學生。</p>
-                    <div class="batch-photo-section">
-                        <input type="file" id="batchPhotoInput" accept="image/jpeg,image/png,image/heic,image/heif,.heic,.heif,image/*" multiple style="display:none">
-                        <button type="button" class="btn btn-secondary" id="batchPhotoSelectBtn">
-                            <span class="btn-icon">📁</span>
-                            選擇照片（可多選）
-                        </button>
-                        <div id="batchPhotoList" class="batch-photo-list" style="display:none">
-                            <table class="data-table" id="batchPhotoTable">
-                                <thead>
-                                    <tr>
-                                        <th>縮圖</th>
-                                        <th>檔名</th>
-                                        <th>學生</th>
-                                        <th>作業項目</th>
-                                        <th>移除</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="batchPhotoTbody"></tbody>
-                            </table>
-                            <div class="batch-photo-actions">
-                                <button type="button" class="btn btn-primary" id="batchPhotoSubmit">
-                                    <span class="btn-icon">📤</span>
-                                    上傳並提交全部
-                                </button>
-                                <button type="button" class="btn btn-secondary" id="batchPhotoClear">清除</button>
-                            </div>
+                    <p class="card-desc">請使用 Google 表單上傳照片，照片將自動儲存至雲端硬碟。單次可上傳最多 10 張，超過請分次提交。</p>
+                    <div class="google-form-photo">
+                        <div class="photo-notice">
+                            <div class="photo-notice-header">📸 照片上傳注意事項（請務必閱讀）</div>
+                            <p>感謝您協助提供活動照片！為確保上傳順利，請留意以下說明：</p>
+                            <ol>
+                                <li><strong>檔案格式：</strong>支援一般圖片格式（JPG, PNG）及 Apple iPhone 的 HEIC 格式。</li>
+                                <li><strong>Apple iPhone 使用者須知：</strong>為了避免上傳失敗，上傳時請記得將 Live Photo（原況照片）功能取消。若仍上傳失敗，請嘗試將照片轉存為一般 JPG 後再行$��傳。</li>
+                                <li><strong>檔案數量與提交方式：</strong>由於系統限制，單次最多可上傳 10 張照片。若您的照片超過 10 張，請分次重新填寫並提交表單即可。</li>
+                                <li><strong>登入提醒：</strong>系統需登入 Google 帳號以進行檔案上傳，您的帳號資訊僅用於辨識檔案來源，不會外洩。</li>
+                            </ol>
                         </div>
-                        <div id="batchPhotoMessage" class="message"></div>
+                        <a href="https://docs.google.com/forms/d/e/1FAIpQLSeoGwr4mV0ohs0k2dNMPupm9A2o4fgmm6WFoS2sRyN1fEeGVg/viewform" target="_blank" class="btn btn-photo-form">
+                            <span>📸</span> 點此開啟 Google 表單上傳照片
+                        </a>
                     </div>
                 </div>
             </section>
@@ -347,7 +336,7 @@
                     <h2>⚙️ 系統功能</h2>
                     <div class="action-buttons">
                         <button id="sendSummary" class="btn btn-info">
-                            <span class="btn-icon">📊</span>
+                            <span class="btn-icon">🍊</span>
                             發送今日摘要給所有家長
                         </button>
                         <button id="incrementGradeBtn" class="btn btn-warning">
