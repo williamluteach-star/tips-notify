@@ -112,7 +112,7 @@
                         <div class="form-group">
                             <label>作業照片（選填）</label>
                             <div class="photo-upload-area" id="photoUploadArea">
-                                <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
+                                <input type="file" id="photoInput" accept="image/jpeg,image/png,image/heic,image/heif,.heic,.heif,image/*" style="display:none">
                                 <div class="photo-placeholder" id="photoPlaceholder">
                                     <span class="photo-icon">📷</span>
                                     <span class="photo-hint">點此拍照或選擇照片</span>
@@ -153,7 +153,7 @@
                     <h2>📷 批量照片上傳</h2>
                     <p class="card-desc">選擇多張照片，<strong>檔名含孩子名字</strong>（如：<code>張小明.jpg</code>、<code>李小花_作業.jpg</code>），系統自動比對學生。</p>
                     <div class="batch-photo-section">
-                        <input type="file" id="batchPhotoInput" accept="image/*" multiple style="display:none">
+                        <input type="file" id="batchPhotoInput" accept="image/jpeg,image/png,image/heic,image/heif,.heic,.heif,image/*" multiple style="display:none">
                         <button type="button" class="btn btn-secondary" id="batchPhotoSelectBtn">
                             <span class="btn-icon">📁</span>
                             選擇照片（可多選）
