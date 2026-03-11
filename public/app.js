@@ -232,7 +232,7 @@ document.getElementById('studentName').addEventListener('change', function() {
     hint.textContent = '';
     hint.style.color = '';
   } else if (!lineId) {
-    hint.textContent = '⚠️ 尚未設定家長 LINE ID，無法發送通知';
+    hint.textContent = '⚠️ 尚未設定家啷 LINE ID，無法發送通知';
     hint.style.color = '#e67e22';
   } else {
     hint.textContent = '✅ 已設定 LINE ID，可發送通知';
@@ -240,125 +240,11 @@ document.getElementById('studentName').addEventListener('change', function() {
   }
 });
 
-// --- 照片上傳 ---
-var pendingPhotoUrl = '';
-
-(function setupPhotoUpload() {
-  var area = document.getElementById('photoUploadArea');
-  var input = document.getElementById('photoInput');
-  var placeholder = document.getElementById('photoPlaceholder');
-  var preview = document.getElementById('photoPreview');
-  var thumb = document.getElementById('photoThumb');
-  var removeBtn = document.getElementById('photoRemove');
-  var status = document.getElementById('photoStatus');
-
-  if (!area) return;
-
-  // 點擊上傳區域觸發 file input
-  area.addEventListener('click', function(e) {
-    if (e.target === removeBtn || removeBtn.contains(e.target)) return;
-    input.click();
-  });
-
-  // 選擇檔案後轉 base64 並預覽
-  input.addEventListener('change', async function() {
-    var file = this.files[0];
-    if (!file) return;
-
-    // 大小限制 10MB
-    if (file.size > 10 * 1024 * 1024) {
-      status.textContent = '❌ 照片超過 10MB，請選擇較小的照片';
-      status.className = 'photo-status error';
-      input.value = '';
-      return;
-    }
-
-    placeholder.style.display = 'none';
-    preview.style.display = 'flex';
-    status.textContent = '📷 ' + file.name + ' 已選取，提交時自動上傳';
-    status.className = 'photo-status info';
-    pendingPhotoUrl = '';
-
-    if (isHeicFile(file)) {
-      // HEIC 無法在 <img> 顯示，用占位圖示代替
-      thumb.src = '';
-      thumb.style.display = 'none';
-      thumb.insertAdjacentHTML('afterend', '<div id="heicPlaceholder" style="font-size:3rem;text-align:center;padding:16px">📷<br><small style="font-size:0.7rem;color:#888">HEIC 格式（上傳後可在 Drive 檢視）</small></div>');
-    } else {
-      // JPEG / PNG：正常預覽
-      document.getElementById('heicPlaceholder') && document.getElementById('heicPlaceholder').remove();
-      thumb.style.display = '';
-      var reader = new FileReader();
-      reader.onload = function(evt) { thumb.src = evt.target.result; };
-      reader.readAsDataURL(file);
-    }
-  });
-
-  // 移除照片
-  removeBtn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    input.value = '';
-    thumb.src = '';
-    thumb.style.display = '';
-    var hp = document.getElementById('heicPlaceholder');
-    if (hp) hp.remove();
-    placeholder.style.display = 'flex';
-    preview.style.display = 'none';
-    status.textContent = '';
-    status.className = 'photo-status';
-    pendingPhotoUrl = '';
-  });
-})();
+// --- 照片上傳（已改用 Google 表單，此區塊保留空白）---
 
 async function uploadPendingPhoto() {
-  var input = document.getElementById('photoInput');
-  var status = document.getElementById('photoStatus');
-  var file = input && input.files[0];
-  if (!file) return '';
-
-  status.textContent = '⏳ 上傳照片中...';
-  status.className = 'photo-status info';
-
-  try {
-    // 讀取 base64（HEIC 用 ArrayBuffer 轉 base64；其他用 dataURL 切片）
-    var base64 = await new Promise(function(resolve, reject) {
-      var reader = new FileReader();
-      if (isHeicFile(file)) {
-        reader.onload = function(e) {
-          var bytes = new Uint8Array(e.target.result);
-          var bin = '';
-          bytes.forEach(function(b) { bin += String.fromCharCode(b); });
-          resolve(btoa(bin));
-        };
-        reader.onerror = reject;
-        reader.readAsArrayBuffer(file);
-      } else {
-        reader.onload = function(e) { resolve(e.target.result.split(',')[1]); };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      }
-    });
-
-    var res = await fetch('/api/upload-photo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ base64: base64, mimeType: file.type, fileName: file.name }),
-    });
-    var data = await res.json();
-    if (data.success && data.viewUrl) {
-      status.textContent = '✅ 照片上傳成功';
-      status.className = 'photo-status success';
-      return data.viewUrl;
-    } else {
-      status.textContent = '⚠️ 照片上傳失敗，將跳過照片';
-      status.className = 'photo-status error';
-      return '';
-    }
-  } catch (e) {
-    status.textContent = '⚠️ 照片上傳失敗（' + e.message + '），將跳過照片';
-    status.className = 'photo-status error';
-    return '';
-  }
+  // 已改用 Google 表單上傳，直接回傳空字串
+  return '';
 }
 
 // --- 單筆記錄作業 ---
@@ -368,20 +254,13 @@ document.getElementById('homeworkForm').addEventListener('submit', async functio
   btn.disabled = true;
   btn.textContent = '處理中...';
 
-  // 先上傳照片（若有）
-  var photoUrl = '';
-  var photoInput = document.getElementById('photoInput');
-  if (photoInput && photoInput.files && photoInput.files[0]) {
-    photoUrl = await uploadPendingPhoto();
-  }
-
   const payload = {
     studentName: document.getElementById('studentName').value,
     homeworkItem: document.getElementById('homeworkItem').value,
     completedTime: document.getElementById('completedTime').value || null,
     operator: document.getElementById('operator').value,
     notes: document.getElementById('notes').value,
-    photoUrl: photoUrl || '',
+    photoUrl: '',
   };
 
   try {
@@ -395,256 +274,15 @@ document.getElementById('homeworkForm').addEventListener('submit', async functio
       showMessage('formMessage', '✅ ' + data.message, 'success');
       document.getElementById('homeworkItem').value = '';
       document.getElementById('notes').value = '';
-      // 清除照片
-      document.getElementById('photoInput').value = '';
-      var t = document.getElementById('photoThumb');
-      t.src = ''; t.style.display = '';
-      var hp = document.getElementById('heicPlaceholder');
-      if (hp) hp.remove();
-      document.getElementById('photoPlaceholder').style.display = 'flex';
-      document.getElementById('photoPreview').style.display = 'none';
-      document.getElementById('photoStatus').textContent = '';
-      pendingPhotoUrl = '';
     } else {
       showMessage('formMessage', '❌ ' + (data.error || '發生錯誤'), 'error');
     }
   } catch (err) {
-    showMessage('formMessage', '❌ 網路錯誤：' + err.message, 'error');
+    showMessage('formMessage', '❌ 網路錯⪓：' + err.message, 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<span class="btn-icon">✓</span> 記錄並發送通知';
   }
-});
-
-// =========================================
-// 批量照片上傳
-// =========================================
-var batchPhotoFiles = []; // { file, studentName, homeworkItem }
-var batchStudentList = []; // 從 API 取得的學生名單（供比對）
-
-// 載入批量照片的學生清單（從已載入的 dropdown 取）
-function getBatchStudentOptions(selected) {
-  var sel = document.getElementById('studentName');
-  var opts = '<option value="">-- 選擇學生 --</option>';
-  for (var i = 1; i < sel.options.length; i++) {
-    var name = sel.options[i].value;
-    var checked = name === selected ? ' selected' : '';
-    opts += '<option value="' + name + '"' + checked + '>' + name + '</option>';
-  }
-  return opts;
-}
-
-// 從檔名推測學生名字（嘗試在已知學生名單中找最長符合）
-function guessStudentFromFilename(filename) {
-  var sel = document.getElementById('studentName');
-  var names = [];
-  for (var i = 1; i < sel.options.length; i++) {
-    names.push(sel.options[i].value);
-  }
-  // 找出在檔名中出現的學生名（取最長的那個）
-  var matched = names.filter(function(n) { return filename.includes(n); });
-  matched.sort(function(a, b) { return b.length - a.length; }); // 最長優先
-  return matched[0] || '';
-}
-
-function renderBatchPhotoTable() {
-  var tbody = document.getElementById('batchPhotoTbody');
-  var list = document.getElementById('batchPhotoList');
-  if (!batchPhotoFiles.length) { list.style.display = 'none'; return; }
-  list.style.display = 'block';
-
-  tbody.innerHTML = batchPhotoFiles.map(function(item, idx) {
-    // HEIC 無法在瀏覽器預覽，顯示占位符
-    var thumbHtml = item.isHeic
-      ? '<div style="width:60px;height:60px;border-radius:6px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:1.6rem;">📷</div>'
-      : '<img src="' + (item.preview || '') + '" style="width:60px;height:60px;object-fit:cover;border-radius:6px;">';
-    return '<tr id="batchRow_' + idx + '">' +
-      '<td>' + thumbHtml + '</td>' +
-      '<td style="font-size:0.82rem;word-break:break-all">' + item.file.name + '</td>' +
-      '<td><select class="batch-student-sel" data-idx="' + idx + '">' + getBatchStudentOptions(item.studentName) + '</select></td>' +
-      '<td><input type="text" class="batch-hw-input" data-idx="' + idx + '" value="' + (item.homeworkItem || '') + '" placeholder="作業項目（選填）" style="width:130px"></td>' +
-      '<td><button type="button" class="btn btn-sm btn-danger batch-remove-btn" data-idx="' + idx + '">✕</button></td>' +
-      '</tr>';
-  }).join('');
-
-  // 綁定事件
-  tbody.querySelectorAll('.batch-student-sel').forEach(function(sel) {
-    sel.addEventListener('change', function() {
-      batchPhotoFiles[parseInt(this.dataset.idx)].studentName = this.value;
-    });
-  });
-  tbody.querySelectorAll('.batch-hw-input').forEach(function(inp) {
-    inp.addEventListener('input', function() {
-      batchPhotoFiles[parseInt(this.dataset.idx)].homeworkItem = this.value;
-    });
-  });
-  tbody.querySelectorAll('.batch-remove-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      batchPhotoFiles.splice(parseInt(this.dataset.idx), 1);
-      renderBatchPhotoTable();
-    });
-  });
-}
-
-document.getElementById('batchPhotoSelectBtn').addEventListener('click', function() {
-  document.getElementById('batchPhotoInput').click();
-});
-
-// 判斷是否為 HEIC/HEIF 格式
-function isHeicFile(file) {
-  var t = (file.type || '').toLowerCase();
-  var n = (file.name || '').toLowerCase();
-  return t === 'image/heic' || t === 'image/heif' ||
-    n.endsWith('.heic') || n.endsWith('.heif');
-}
-
-document.getElementById('batchPhotoInput').addEventListener('change', async function() {
-  var files = Array.from(this.files);
-  if (!files.length) return;
-
-  // 讀取每個檔案的預覽 + 推測學生名
-  var newItems = await Promise.all(files.map(function(file) {
-    return new Promise(function(resolve) {
-      if (isHeicFile(file)) {
-        // HEIC/HEIF：瀏覽器無法顯示預覽，改讀 binary base64 供上傳用
-        var binReader = new FileReader();
-        binReader.onload = function(e) {
-          var raw = e.target.result; // ArrayBuffer
-          var bytes = new Uint8Array(raw);
-          var bin = '';
-          bytes.forEach(function(b) { bin += String.fromCharCode(b); });
-          var b64 = btoa(bin);
-          resolve({
-            file: file,
-            preview: '',           // 無法預覽
-            rawBase64: b64,        // 供上傳用
-            isHeic: true,
-            studentName: guessStudentFromFilename(file.name),
-            homeworkItem: '',
-            status: 'pending',
-          });
-        };
-        binReader.readAsArrayBuffer(file);
-      } else {
-        // JPEG / PNG 等：正常讀 dataURL
-        var reader = new FileReader();
-        reader.onload = function(e) {
-          resolve({
-            file: file,
-            preview: e.target.result,
-            rawBase64: null,
-            isHeic: false,
-            studentName: guessStudentFromFilename(file.name),
-            homeworkItem: '',
-            status: 'pending',
-          });
-        };
-        reader.readAsDataURL(file);
-      }
-    });
-  }));
-
-  batchPhotoFiles = batchPhotoFiles.concat(newItems);
-  renderBatchPhotoTable();
-  this.value = ''; // 允許重複選同一檔案
-});
-
-document.getElementById('batchPhotoClear').addEventListener('click', function() {
-  batchPhotoFiles = [];
-  renderBatchPhotoTable();
-  document.getElementById('batchPhotoMessage').textContent = '';
-});
-
-document.getElementById('batchPhotoSubmit').addEventListener('click', async function() {
-  if (!batchPhotoFiles.length) return;
-
-  var operator = document.getElementById('operator').value || getCurrentTeacher() || '系統';
-  var btn = this;
-  btn.disabled = true;
-
-  var msgEl = document.getElementById('batchPhotoMessage');
-  var successCount = 0;
-  var errors = []; // 收集每筆錯誤
-
-  for (var i = 0; i < batchPhotoFiles.length; i++) {
-    var item = batchPhotoFiles[i];
-    if (!item.studentName) {
-      msgEl.textContent = '⚠️ 第 ' + (i+1) + ' 張照片尚未選擇學生，請確認後再提交';
-      msgEl.className = 'message error';
-      btn.disabled = false;
-      return;
-    }
-    msgEl.textContent = '⏳ 處理第 ' + (i+1) + '/' + batchPhotoFiles.length + ' 張（' + item.studentName + '）...';
-    msgEl.className = 'message info';
-
-    try {
-      // 1. 上傳照片到 Drive（HEIC 用檔案原始 base64；其他格式從 preview 取）
-      var base64, mimeType;
-      if (item.rawBase64) {
-        // HEIC/HEIF：從 FileReader 直接讀取的 binary base64
-        base64 = item.rawBase64;
-        mimeType = item.file.type || 'image/heic';
-      } else {
-        base64 = item.preview.split(',')[1];
-        mimeType = item.file.type || 'image/jpeg';
-      }
-
-      var uploadErr = '';
-      var photoUrl = '';
-      var uploadRes = await fetch('/api/upload-photo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64: base64, mimeType: mimeType, fileName: item.file.name }),
-      });
-      var uploadData = await uploadRes.json();
-      if (uploadData.success && uploadData.viewUrl) {
-        photoUrl = uploadData.viewUrl;
-      } else {
-        uploadErr = uploadData.error || '照片上傳失敗';
-        console.warn('[batch-photo] Drive 上傳失敗（' + item.studentName + '）:', uploadErr);
-      }
-
-      // 2. 記錄作業（即使 Drive 上傳失敗，仍嘗試記錄作業）
-      var hwItem = item.homeworkItem || '作業照片';
-      var hwRes = await fetch('/api/homework', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentName: item.studentName,
-          homeworkItem: hwItem,
-          operator: operator,
-          photoUrl: photoUrl,
-        }),
-      });
-      var hwData = await hwRes.json();
-      if (hwData.success) {
-        successCount++;
-        if (uploadErr) {
-          errors.push('⚠️ ' + item.studentName + '：作業記錄成功，但照片未上傳（' + uploadErr + '）');
-        }
-      } else {
-        var hwErr = hwData.error || '作業記錄失敗';
-        errors.push('❌ ' + item.studentName + '：' + hwErr + (uploadErr ? '；照片：' + uploadErr : ''));
-      }
-    } catch (e) {
-      errors.push('❌ ' + item.studentName + '：' + e.message);
-    }
-  }
-
-  // 顯示結果
-  if (errors.length === 0) {
-    msgEl.textContent = '✅ 完成！' + successCount + ' 筆全部成功';
-    msgEl.className = 'message success';
-  } else {
-    var errText = successCount + ' 筆成功，' + errors.length + ' 筆有問題：\n' + errors.join('\n');
-    msgEl.textContent = errText;
-    msgEl.className = 'message error';
-    msgEl.style.whiteSpace = 'pre-wrap';
-  }
-
-  batchPhotoFiles = [];
-  renderBatchPhotoTable();
-  btn.disabled = false;
 });
 
 // --- 批量記錄 ---
