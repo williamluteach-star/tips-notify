@@ -525,9 +525,9 @@ sendAnotherBtn.addEventListener('click', function() {
 // Helpers
 // ─────────────────────────────────────────────
 function showSection(name) {
-  formSection.style.display  = name === 'form'     ? '' : 'none';
-  progressSec.style.display  = name === 'progress' ? '' : 'none';
-  successSec.style.display   = name === 'success'  ? '' : 'none';
+  formSection.style.display  = name === 'form'     ? 'block' : 'none';
+  progressSec.style.display  = name === 'progress' ? 'block' : 'none';
+  successSec.style.display   = name === 'success'  ? 'block' : 'none';
 }
 
 function setProgress(pct, label) {
