@@ -465,6 +465,72 @@ class HomeworkService {
   }
 
   /**
+   * 記錄家長上傳作業照片（寫入「家長上傳記錄」工作表）
+   * 欄位：A=上傳時間, B=學生姓名, C=科目, D=照片網址
+   */
+  async recordParentUpload({ studentName, subject, photoUrl, uploadTime }) {
+    if (!this.sheets) await this.init();
+    if (!this.sheets) return null; // 預覽模式靜默略過
+
+    const timestamp = uploadTime
+      ? new Date(uploadTime).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })
+      : new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+
+    try {
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: '家長上傳記錄!A2',
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+        resource: { values: [[timestamp, studentName, subject || '未填寫', photoUrl]] },
+      });
+      return { timestamp, studentName, subject, photoUrl };
+    } catch (error) {
+      // 工作表不存在時給出明確提示
+      if (error.message && error.message.includes('Unable to parse range')) {
+        console.warn('[GSheets] 「家長上傳記錄」工作表不存在，請先在 Google Sheets 手動新增此工作表。');
+      } else {
+        console.error('記錄家長上傳錯誤:', error.message);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * 取得家長上傳記錄（供 Web 介面顯示）
+   */
+  async getParentUploads(limit = 50) {
+    if (!this.sheets) await this.init();
+    if (!this.sheets) return [];
+
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: '家長上傳記錄!A2:D',
+      });
+
+      const rows = (response.data.values || [])
+        .filter(row => row[0])
+        .map(row => ({
+          uploadTime: row[0],
+          studentName: row[1] || '',
+          subject: row[2] || '',
+          photoUrl: row[3] || '',
+        }))
+        .reverse(); // 最新在前
+
+      return rows.slice(0, limit);
+    } catch (error) {
+      if (error.message && error.message.includes('Unable to parse range')) {
+        console.warn('[GSheets] 「家長上傳記錄」工作表不存在。');
+        return [];
+      }
+      console.error('取得家長上傳記錄錯誤:', error.message);
+      return [];
+    }
+  }
+
+  /**
    * 取得指定日期的作業記錄
    */
   async getHomeworkByDate(date) {

@@ -613,6 +613,10 @@ app.post('/api/parent-notify', async (req, res) => {
     console.log(`   照片：${photoUrl}`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
+    // 寫入 Google Sheets「家長上傳記錄」（不影響主流程）
+    homeworkService.recordParentUpload({ studentName, subject: subjectStr, photoUrl, uploadTime })
+      .catch(err => console.warn('[parent-notify] 寫入 Sheets 失敗（不影響上傳）:', err.message));
+
     const teacherLineId = process.env.TEACHER_LINE_USER_ID;
 
     if (!client || !teacherLineId) {
@@ -646,6 +650,18 @@ app.post('/api/parent-notify', async (req, res) => {
     }
   } catch (e) {
     console.error('[parent-notify] 錯誤:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// API: 取得家長上傳記錄（供 Web 介面顯示）
+app.get('/api/parent-uploads', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const records = await homeworkService.getParentUploads(limit);
+    res.json({ success: true, records });
+  } catch (e) {
+    console.error('[parent-uploads] 錯誤:', e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });

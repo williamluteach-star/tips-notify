@@ -188,6 +188,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (target === 'students') loadStudentList();
     if (target === 'pairing') loadPairingList();
     if (target === 'tools') checkServerStatus();
+    if (target === 'parent-uploads') loadParentUploads();
   });
 });
 
@@ -917,6 +918,47 @@ document.getElementById('copyLineId').addEventListener('click', function() {
     setTimeout(function() { btn.textContent = '📋 複製帳號 ID'; }, 2000);
   });
 });
+
+// ── 家長上傳記錄 ──────────────────────────────────────────
+async function loadParentUploads() {
+  const container = document.getElementById('parentUploadsContainer');
+  if (!container) return;
+  container.innerHTML = '<div class="empty">載入中…</div>';
+
+  try {
+    const res = await fetch('/api/parent-uploads?limit=50');
+    const data = await res.json();
+    const records = data.records || [];
+
+    if (records.length === 0) {
+      container.innerHTML = '<div class="empty">目前沒有家長上傳記錄。</div>';
+      return;
+    }
+
+    const cards = records.map(r => {
+      const imgHtml = r.photoUrl
+        ? `<a href="${r.photoUrl}" target="_blank" rel="noopener">
+             <img src="${r.photoUrl}" alt="作業照片"
+               style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;display:block;margin-bottom:10px;">
+           </a>`
+        : '<div style="height:80px;background:#f0f0f0;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#aaa;margin-bottom:10px;">無照片</div>';
+
+      return `<div style="background:#fff;border:1.5px solid #ebebeb;border-radius:14px;padding:16px;margin-bottom:14px;">
+        ${imgHtml}
+        <div style="font-size:0.95rem;color:#333;font-weight:600;">${r.studentName || '—'}</div>
+        <div style="font-size:0.85rem;color:#666;margin-top:4px;">📚 ${r.subject || '未填寫'}</div>
+        <div style="font-size:0.8rem;color:#aaa;margin-top:4px;">⏰ ${r.uploadTime || ''}</div>
+      </div>`;
+    }).join('');
+
+    container.innerHTML = `<p class="record-count" style="margin-bottom:12px;">共 ${records.length} 筆記錄</p>` + cards;
+  } catch (e) {
+    container.innerHTML = '<div class="empty">載入失敗，請重新整理。</div>';
+  }
+}
+
+document.getElementById('refreshParentUploadsBtn') &&
+  document.getElementById('refreshParentUploadsBtn').addEventListener('click', loadParentUploads);
 
 // --- 頁面初始化 ---
 (function init() {
