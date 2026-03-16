@@ -631,10 +631,19 @@ app.post('/api/parent-notify', async (req, res) => {
       `⏰ 上傳時間：${time}\n\n` +
       `📷 查看照片：\n${photoUrl}`;
 
-    await client.pushMessage(teacherLineId, { type: 'text', text: messageText });
-    console.log(`[parent-notify] ✅ 已通知老師（${teacherLineId}）`);
-
-    res.json({ success: true, notified: true, message: '已通知老師' });
+    try {
+      await client.pushMessage(teacherLineId, { type: 'text', text: messageText });
+      console.log(`[parent-notify] ✅ 已通知老師（${teacherLineId}）`);
+      return res.json({ success: true, notified: true, message: '已通知老師' });
+    } catch (lineErr) {
+      // LINE 推播失敗不影響上傳結果，回傳 200 讓前端顯示成功畫面
+      console.error('[parent-notify] LINE 推播失敗（照片已上傳）:', lineErr.message);
+      return res.json({
+        success: true,
+        notified: false,
+        message: '照片已上傳，LINE 通知失敗：' + lineErr.message,
+      });
+    }
   } catch (e) {
     console.error('[parent-notify] 錯誤:', e.message);
     res.status(500).json({ success: false, error: e.message });

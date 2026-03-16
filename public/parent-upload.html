@@ -429,8 +429,13 @@ function notifyTeacher(studentName, subject, photoUrl) {
       photoUrl: photoUrl,
       uploadTime: new Date().toISOString(),
     }),
-  }).then(function(r) { return r.json(); })
-    .catch(function() { return { success: false, notified: false }; });
+  }).then(function(r) {
+    // 不管後端回什麼 HTTP status，都嘗試解析 JSON；失敗也不中斷流程
+    return r.json().catch(function() { return { success: false, notified: false }; });
+  }).catch(function() {
+    // 網路錯誤或其他例外，也不中斷上傳成功流程
+    return { success: false, notified: false };
+  });
 }
 
 // ─────────────────────────────────────────────
