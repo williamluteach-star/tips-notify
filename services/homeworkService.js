@@ -465,6 +465,35 @@ class HomeworkService {
   }
 
   /**
+   * 記錄批量輸入的原始文字（寫入「批量輸入記錄」工作表）
+   * 欄位：A=送出時間, B=操作人員, C=筆數, D=原始內容
+   */
+  async recordBatchInput({ operator, count, rawInput }) {
+    if (!this.sheets) await this.init();
+    if (!this.sheets) return null;
+
+    const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+
+    try {
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: '批量輸入記錄!A2',
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+        resource: { values: [[timestamp, operator || '', count || 0, rawInput || '']] },
+      });
+      return { timestamp, operator, count, rawInput };
+    } catch (error) {
+      if (error.message && error.message.includes('Unable to parse range')) {
+        console.warn('[GSheets] 「批量輸入記錄」工作表不存在，請先手動新增此工作表。');
+      } else {
+        console.error('記錄批量輸入錯誤:', error.message);
+      }
+      return null;
+    }
+  }
+
+  /**
    * 記錄家長上傳作業照片（寫入「家長上傳記錄」工作表）
    * 欄位：A=上傳時間, B=學生姓名, C=科目, D=照片網址
    */

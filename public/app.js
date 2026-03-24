@@ -477,7 +477,7 @@ document.getElementById('batchSubmit').addEventListener('click', async function(
     const res = await fetch('/api/homework/batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ records: records }),
+      body: JSON.stringify({ records: records, rawInput: raw, operator: getCurrentTeacher() }),
     });
     const data = await res.json();
     if (data.success) {

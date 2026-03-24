@@ -255,7 +255,7 @@ app.post('/api/homework', async (req, res) => {
 // API: 批量記錄作業
 app.post('/api/homework/batch', async (req, res) => {
   try {
-    const { records } = req.body;
+    const { records, rawInput, operator } = req.body;
 
     if (!Array.isArray(records) || records.length === 0) {
       return res.status(400).json({ error: '請提供作業記錄陣列' });
@@ -281,6 +281,15 @@ app.post('/api/homework/batch', async (req, res) => {
       } catch (error) {
         results.push({ success: false, error: error.message });
       }
+    }
+
+    // 儲存原始輸入文字（不影響主流程）
+    if (rawInput) {
+      homeworkService.recordBatchInput({
+        operator: operator || records[0]?.operator || '',
+        count: results.filter(r => r.success).length,
+        rawInput,
+      }).catch(err => console.warn('[batch] 儲存原始輸入失敗:', err.message));
     }
 
     res.json({
