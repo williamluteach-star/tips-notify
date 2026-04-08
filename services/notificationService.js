@@ -75,8 +75,8 @@ class NotificationService {
       if (photoUrl) {
         messageText += `\n\n📷 作業照片：\n${photoUrl}`;
       }
-      messageText += `\n\n✅ 繼續加油！感謝您的關注 🙏`;
-
+      messageText += `\n\n✅ 孩子很努力！感謝您的肯定與鼓勵 🙏\n🌱 "Your hard work will pay off. Stay positive and keep shining!" ✨`;
+      
       const message = { type: 'text', text: messageText };
 
       // 發送給所有配對的家長
