@@ -75,7 +75,13 @@ class NotificationService {
       if (photoUrl) {
         messageText += `\n\n📷 作業照片：\n${photoUrl}`;
       }
-      messageText += `\n\n✅ 孩子很努力！感謝您的肯定與鼓勵 🙏\n🌱 "Your hard work will pay off. Stay positive and keep shining!" ✨`;
+      const encouragements = [
+        `🐾 "Every small step you take brings you closer to your goal. Keep going!" 🚀\n（你邁出的每一個小步伐，都讓你離目標更近。繼續前進吧！）`,
+        `🌟 "Believe in yourself and all that you are. You are stronger than you think." 💪\n（相信自己以及你所擁有的一切。你比你想像的還要強大。）`,
+        `🌱 "Kid's hard work will pay off. Stay positive and keep shining!" ✨\n（你的努力會有回報的。保持正面，繼續閃耀！）`,
+      ];
+      const randomMsg = encouragements[Math.floor(Math.random() * encouragements.length)];
+      messageText += `\n\n✅ 孩子很努力！感謝您的肯定與鼓勵 🙏\n${randomMsg}`;
       
       const message = { type: 'text', text: messageText };
 
