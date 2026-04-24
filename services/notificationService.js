@@ -184,6 +184,90 @@ class NotificationService {
   }
 
   /**
+   * 發送週摘要（週三送週一~三；週六送週四~六）
+   * startDate / endDate 格式：'YYYY-MM-DD'
+   */
+  async sendWeeklySummary(startDate, endDate) {
+    if (!client) {
+      return { success: false, message: 'LINE Bot 未設定（預覽模式）' };
+    }
+
+    try {
+      const records = await homeworkService.getHomeworkByDateRange(startDate, endDate);
+
+      if (records.length === 0) {
+        console.log(`[週摘要] ${startDate} ~ ${endDate} 無作業記錄`);
+        return { success: true, message: '此區間無作業記錄', sent: 0 };
+      }
+
+      // 依學生分組
+      const grouped = {};
+      records.forEach(r => {
+        if (!grouped[r.學生姓名]) grouped[r.學生姓名] = [];
+        grouped[r.學生姓名].push(r);
+      });
+
+      const startFmt = moment(startDate).format('MM/DD');
+      const endFmt   = moment(endDate).format('MM/DD');
+      const results  = [];
+
+      for (const [studentName, items] of Object.entries(grouped)) {
+        // 取得家長 LINE ID（先查 parent-pairs.json，再 fallback Sheets）
+        let lineUserIds = this.getParentLineUserIds(studentName);
+        if (lineUserIds.length === 0) {
+          const fallbackStr = await homeworkService.getParentLineUserId(studentName);
+          if (fallbackStr) {
+            lineUserIds = fallbackStr.split(',').map(s => s.trim()).filter(Boolean);
+          }
+        }
+
+        if (lineUserIds.length === 0) {
+          results.push({ studentName, success: false, message: '找不到LINE ID' });
+          continue;
+        }
+
+        // 建立週摘要訊息
+        let msg = `📋【${startFmt}～${endFmt} 作業週報】\n\n`;
+        msg += `👦 ${studentName} 本期完成：\n\n`;
+        items.forEach((r, i) => {
+          const dateStr = moment(r.時間戳記, ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss']).format('MM/DD');
+          msg += `${i + 1}. ${r.作業項目}\n   📅 ${dateStr}\n\n`;
+        });
+        msg += `✅ 共完成 ${items.length} 項作業\n`;
+
+        const encouragements = [
+          `🐾 "Every small step you take brings you closer to your goal. Keep going!" 🚀\n（你邁出的每一個小步伐，都讓你離目標更近。繼續前進吧！）`,
+          `🌟 "Believe in yourself and all that you are. You are stronger than you think." 💪\n（相信自己以及你所擁有的一切。你比你想像的還要強大。）`,
+          `🌱 "Kid's hard work will pay off. Stay positive and keep shining!" ✨\n（孩子的努力會有回報的。保持正面，繼續閃耀！）`,
+        ];
+        msg += `\n${encouragements[Math.floor(Math.random() * encouragements.length)]}\n\n感謝您的關注 🙏`;
+
+        for (const uid of lineUserIds) {
+          try {
+            await client.pushMessage(uid, { type: 'text', text: msg });
+            console.log(`[週摘要] ✅ 已發送給 ${studentName} 的家長（${uid}）`);
+            results.push({ studentName, userId: uid, success: true });
+          } catch (e) {
+            console.error(`[週摘要] ❌ 發送失敗 ${uid}:`, e.message);
+            results.push({ studentName, userId: uid, success: false, error: e.message });
+          }
+        }
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      return {
+        success: true,
+        message: `週摘要發送完成：${successCount}/${results.length} 位家長`,
+        period: `${startDate} ~ ${endDate}`,
+        results,
+      };
+    } catch (error) {
+      console.error('[週摘要] 錯誤:', error);
+      throw new Error(`發送週摘要失敗: ${error.message}`);
+    }
+  }
+
+  /**
    * 批量通知（使用LINE Broadcast API，需升級至Premium帳號）
    */
   async broadcastMessage(messageText) {

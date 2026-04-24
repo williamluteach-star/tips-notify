@@ -227,14 +227,8 @@ app.post('/api/homework', async (req, res) => {
       throw error;
     }
 
-    // 發送通知給家長
-    let notifyResult = null;
-    try {
-      notifyResult = await notificationService.notifyParent(studentName, homeworkItem, completedTime, photoUrl);
-    } catch (error) {
-      console.warn('發送通知失敗:', error.message);
-      notifyResult = { success: false, message: error.message };
-    }
+    // 即時通知已改為週三/週六週摘要，此處不再即時推播
+    const notifyResult = { success: false, message: '已改為週摘要通知（週三/週六發送）' };
 
     const notifyMsg = notifyResult?.success
       ? `通知已發送（${notifyResult.message}）`
@@ -271,12 +265,7 @@ app.post('/api/homework/batch', async (req, res) => {
           operator: record.operator || '系統',
         });
 
-        await notificationService.notifyParent(
-          record.studentName,
-          record.homeworkItem,
-          record.completedTime
-        );
-
+        // 即時通知已改為週三/週六週摘要，此處不再即時推播
         results.push({ success: true, record: result });
       } catch (error) {
         results.push({ success: false, error: error.message });
@@ -300,6 +289,40 @@ app.post('/api/homework/batch', async (req, res) => {
   } catch (error) {
     console.error('批量記錄錯誤:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// API: 發送週摘要（週三送週一~三；週六送週四~六）
+app.post('/api/weekly-summary', async (req, res) => {
+  try {
+    const moment = require('moment-timezone');
+    const now = moment().tz('Asia/Taipei');
+    const dow = now.day(); // 0=日,1=一,...,6=六
+
+    let startDate, endDate;
+
+    if (req.body.startDate && req.body.endDate) {
+      // 允許手動指定日期區間
+      startDate = req.body.startDate;
+      endDate   = req.body.endDate;
+    } else if (dow === 3) {
+      // 週三：送本週一~三
+      startDate = now.clone().day(1).format('YYYY-MM-DD');
+      endDate   = now.clone().day(3).format('YYYY-MM-DD');
+    } else if (dow === 6) {
+      // 週六：送本週四~六
+      startDate = now.clone().day(4).format('YYYY-MM-DD');
+      endDate   = now.clone().day(6).format('YYYY-MM-DD');
+    } else {
+      return res.status(400).json({ error: '今天不是週三或週六，請手動指定 startDate / endDate' });
+    }
+
+    console.log(`[weekly-summary] 發送 ${startDate} ~ ${endDate} 的作業週摘要`);
+    const result = await notificationService.sendWeeklySummary(startDate, endDate);
+    res.json(result);
+  } catch (e) {
+    console.error('[weekly-summary] 錯誤:', e.message);
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 

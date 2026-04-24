@@ -560,6 +560,43 @@ class HomeworkService {
   }
 
   /**
+   * 取得日期區間的作業記錄（供週摘要使用）
+   */
+  async getHomeworkByDateRange(startDate, endDate) {
+    if (!this.sheets) await this.init();
+    if (!this.sheets) return [];
+
+    const start = moment(startDate).startOf('day');
+    const end   = moment(endDate).endOf('day');
+
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: '作業記錄表!A2:G',
+      });
+
+      return (response.data.values || [])
+        .filter(row => {
+          if (!row[0]) return false;
+          const d = moment(row[0], ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss'], true);
+          return d.isValid() && d.isBetween(start, end, null, '[]');
+        })
+        .map(row => ({
+          時間戳記: row[0],
+          學生姓名: row[1] || '',
+          作業項目: row[2] || '',
+          完成時間: row[3] || '',
+          操作人員: row[4] || '',
+          通知狀態: row[5] || '',
+          備註: row[6] || '',
+        }));
+    } catch (error) {
+      console.error('取得日期區間作業記錄錯誤:', error);
+      throw new Error(`取得日期區間作業記錄失敗: ${error.message}`);
+    }
+  }
+
+  /**
    * 取得指定日期的作業記錄
    */
   async getHomeworkByDate(date) {
