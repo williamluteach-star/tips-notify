@@ -465,7 +465,7 @@ document.getElementById('batchSubmit').addEventListener('click', async function(
   const lines = raw.split('\n').filter(function(l) { return l.trim(); });
   const records = lines.map(function(line) {
     const parts = line.split(',').map(function(p) { return p.trim(); });
-    return { studentName: parts[0] || '', homeworkItem: parts[1] || '', completedTime: parts[2] || null, operator: parts[3] || getCurrentTeacher() || '' };
+    return { studentName: parts[0] || '', homeworkItem: parts[1] || '', completedTime: parts[2] || null, operator: getCurrentTeacher() || '' };
   }).filter(function(r) { return r.studentName && r.homeworkItem; });
 
   if (records.length === 0) { showMessage('batchMessage', '格式錯誤，至少需要「學生姓名,作業項目」', 'error'); return; }
