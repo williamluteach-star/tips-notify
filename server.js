@@ -55,6 +55,8 @@ app.post('/webhook', async (req, res) => {
       await handleMessage(event);
     } else if (event.type === 'follow') {
       await handleFollow(event);
+    } else if (event.type === 'join') {
+      await handleJoinGroup(event);
     }
   }
 
@@ -72,49 +74,57 @@ async function handleMessage(event) {
   }
 
   const userMessage = event.message.text;
-  const userId = event.source.userId;
+  const sourceType = event.source.type; // 'user', 'group', 'room'
+
+  // 群組訊息用 groupId（C...），個人訊息用 userId（U...）
+  // LINE pushMessage 兩種格式都支援
+  const lineId = sourceType === 'group'
+    ? event.source.groupId
+    : event.source.userId;
 
   // 嘗試從訊息中提取學生姓名並自動配對（支援多位兄弟姐妹）
   const studentNames = parentPair.extractStudentNames(userMessage);
 
   if (studentNames.length > 0) {
-    // 每位學生各自配對同一個家長 User ID
+    // 每位學生各自配對同一個 LINE ID（群組或個人）
     for (const name of studentNames) {
-      parentPair.addPair(userId, name, userMessage);
+      parentPair.addPair(lineId, name, userMessage);
     }
 
     // 同步配對到 Google Sheets（讓配對在部署重啟後仍然有效）
     for (const name of studentNames) {
-      homeworkService.updateStudentLineId(name, userId).catch(e =>
+      homeworkService.updateStudentLineId(name, lineId).catch(e =>
         console.warn('[sync] 無法同步配對到 Google Sheets:', e.message)
       );
     }
 
     const nameList = studentNames.join('、');
+    const idTypeLabel = sourceType === 'group' ? '群組 ID' : 'User ID';
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('✅ 自動配對成功（本地記錄＋Google Sheets）');
+    console.log(`✅ 自動配對成功（${sourceType === 'group' ? '群組模式' : '個人模式'}）`);
     console.log(`   學生姓名: ${nameList}`);
-    console.log(`   User ID: ${userId}`);
+    console.log(`   ${idTypeLabel}: ${lineId}`);
     console.log(`   訊息內容: ${userMessage}`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     // 回覆家長確認（列出所有孩子）
     await client.replyMessage(event.replyToken, {
       type: 'text',
-      text: `感謝您的回覆！我們已收到${nameList}的家長資訊。您將收到孩子作業完成的相關通知。`,
+      text: `感謝您的回覆！我們已收到${nameList}的家長資訊。之後孩子作業完成時，通知將傳送到${sourceType === 'group' ? '此群組' : '您的帳號'}。`,
     });
     return;
   }
 
-  // 記錄所有訊息（用於取得 User ID）
+  // 記錄所有訊息（用於取得 ID）
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('💬 收到訊息');
-  console.log(`   User ID: ${userId}`);
+  console.log(`   來源類型: ${sourceType}`);
+  console.log(`   LINE ID: ${lineId}`);
   console.log(`   訊息內容: ${userMessage}`);
   if (userMessage.includes('家長') || userMessage.includes('我是')) {
     console.log('   💡 提示：如果訊息包含「我是XXX的家長」，系統會自動配對');
   } else {
-    console.log('   💡 請家長回覆「我是XXX的家長」以便自動配對');
+    console.log('   💡 請家長傳送「我是XXX的媽媽」以便自動配對');
   }
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
@@ -172,6 +182,23 @@ async function handleFollow(event) {
   await client.replyMessage(event.replyToken, {
     type: 'text',
     text: '歡迎！您將收到孩子作業完成的相關通知。如需查詢記錄，請輸入「查詢」。',
+  });
+}
+
+// 處理 Bot 被加入群組事件
+async function handleJoinGroup(event) {
+  if (!client) return;
+
+  const groupId = event.source.groupId;
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('👥 Bot 被加入群組！');
+  console.log(`   Group ID: ${groupId}`);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  // 傳送說明訊息
+  await client.replyMessage(event.replyToken, {
+    type: 'text',
+    text: '大家好！我是英典教育作業通知機器人 📚\n\n請群組內的家長傳送：\n「我是XXX的媽媽」\n（XXX 為孩子的姓名）\n\n系統會自動將此群組設定為通知對象，孩子完成作業後通知將傳送到這個群組。',
   });
 }
 
