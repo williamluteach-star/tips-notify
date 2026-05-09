@@ -295,8 +295,9 @@ app.post('/api/homework/batch', async (req, res) => {
 // API: 發送週摘要（週三送週一~三；週六送週四~六）
 app.post('/api/weekly-summary', async (req, res) => {
   try {
-    const moment = require('moment-timezone');
-    const now = moment().tz('Asia/Taipei');
+    const moment = require('moment');
+    // 台灣時區 UTC+8：直接加 8 小時偏移
+    const now = moment().utcOffset('+08:00');
     const dow = now.day(); // 0=日,1=一,...,6=六
 
     let startDate, endDate;
