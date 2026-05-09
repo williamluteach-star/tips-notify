@@ -71,9 +71,9 @@ class NotificationService {
         : moment().format('YYYY年MM月DD日 HH:mm');
 
       // 建立訊息（有照片則附上連結）
-      let messageText = `🎉 學習進度通知 🎉\n\n👦 ${studentName} 已完成以下作業：\n\n📚 ${homeworkItem}\n\n⏰ 完成時間：${timeFormatted}`;
+      let messageText = `🎉 學習進度通知 🎉\n\n👦 ${studentName} 已完成以下進度：\n\n📚 ${homeworkItem}\n\n⏰ 完成時間：${timeFormatted}`;
       if (photoUrl) {
-        messageText += `\n\n📷 作業照片：\n${photoUrl}`;
+        messageText += `\n\n📷 進度照片：\n${photoUrl}`;
       }
       const encouragements = [
         `🐾 "Every small step you take brings you closer to your goal. Keep going!" 🚀\n（你邁出的每一個小步伐，都讓你離目標更近。繼續前進吧！）`,
@@ -154,11 +154,11 @@ class NotificationService {
         }
 
         // 建立摘要訊息
-        let msgText = `【${moment(targetDate).format('YYYY年MM月DD日')} 作業完成摘要】\n\n${studentName}今日完成：\n\n`;
+        let msgText = `【${moment(targetDate).format('YYYY年MM月DD日')} 學習進度摘要】\n\n${studentName}今日完成：\n\n`;
         studentRecords.forEach((record, index) => {
           msgText += `${index + 1}. ${record.作業項目}\n   ⏰ ${record.完成時間}\n\n`;
         });
-        msgText += `共完成 ${studentRecords.length} 項作業\n\n感謝您的關注！`;
+        msgText += `共完成 ${studentRecords.length} 項進度\n\n感謝您的關注！`;
 
         // 發送給所有配對的家長
         for (const uid of lineUserIds) {
@@ -227,13 +227,13 @@ class NotificationService {
         }
 
         // 建立週摘要訊息
-        let msg = `📋【${startFmt}～${endFmt} 作業週報】\n\n`;
+        let msg = `📋【${startFmt}～${endFmt} 學習進度週報】\n\n`;
         msg += `👦 ${studentName} 本期完成：\n\n`;
         items.forEach((r, i) => {
           const dateStr = moment(r.時間戳記, ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss']).format('MM/DD');
           msg += `${i + 1}. ${r.作業項目}\n   📅 ${dateStr}\n\n`;
         });
-        msg += `✅ 共完成 ${items.length} 項作業\n`;
+        msg += `✅ 共完成 ${items.length} 項進度\n`;
 
         const encouragements = [
           `🐾 "Every small step you take brings you closer to your goal. Keep going!" 🚀\n（你邁出的每一個小步伐，都讓你離目標更近。繼續前進吧！）`,
