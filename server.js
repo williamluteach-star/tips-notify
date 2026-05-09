@@ -198,7 +198,7 @@ async function handleJoinGroup(event) {
   // 傳送說明訊息
   await client.replyMessage(event.replyToken, {
     type: 'text',
-    text: '大家好！我是英典教育作業通知機器人 📚\n\n請群組內的家長傳送：\n「我是XXX的媽媽」\n（XXX 為孩子的姓名）\n\n系統會自動將此群組設定為通知對象，孩子完成作業後通知將傳送到這個群組。',
+    text: '大家好！我是英典教育作業通知機器人 📚\n\n請群組內的家長傳送：\n「我是XXX的家長」\n（XXX 為孩子的姓名）\n\n系統會自動將此群組設定為通知對象，孩子完成作業後通知將傳送到這個群組。',
   });
 }
 
