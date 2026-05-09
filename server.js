@@ -306,8 +306,8 @@ app.post('/api/weekly-summary', async (req, res) => {
       // 允許手動指定日期區間
       startDate = req.body.startDate;
       endDate   = req.body.endDate;
-    } else if (dow === 3) {
-      // 週三：送本週一~三
+    } else if (dow === 4) {
+      // 週四：送本週一~三
       startDate = now.clone().day(1).format('YYYY-MM-DD');
       endDate   = now.clone().day(3).format('YYYY-MM-DD');
     } else if (dow === 6) {
@@ -315,7 +315,7 @@ app.post('/api/weekly-summary', async (req, res) => {
       startDate = now.clone().day(4).format('YYYY-MM-DD');
       endDate   = now.clone().day(6).format('YYYY-MM-DD');
     } else {
-      return res.status(400).json({ error: '今天不是週三或週六，請手動指定 startDate / endDate' });
+      return res.status(400).json({ error: '今天不是週四或週六，請手動指定 startDate / endDate' });
     }
 
     console.log(`[weekly-summary] 發送 ${startDate} ~ ${endDate} 的作業週摘要`);
