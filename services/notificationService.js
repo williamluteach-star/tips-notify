@@ -71,7 +71,7 @@ class NotificationService {
         : moment().format('YYYY年MM月DD日 HH:mm');
 
       // 建立訊息（有照片則附上連結）
-      let messageText = `🎉 學習進度通知 🎉\n\n👦 ${studentName} 已完成以下進度：\n\n📚 ${homeworkItem}\n\n⏰ 完成時間：${timeFormatted}`;
+      let messageText = `🎉 學習進度通知 🎉\n\n${studentName} 已完成以下進度：\n\n📚 ${homeworkItem}\n\n⏰ 完成時間：${timeFormatted}`;
       if (photoUrl) {
         messageText += `\n\n📷 進度照片：\n${photoUrl}`;
       }
@@ -228,7 +228,7 @@ class NotificationService {
 
         // 建立週摘要訊息
         let msg = `📋【${startFmt}～${endFmt} 學習進度週報】\n\n`;
-        msg += `👦 ${studentName} 本期完成：\n\n`;
+        msg += `${studentName} 本期完成：\n\n`;
         items.forEach((r, i) => {
           const dateStr = moment(r.時間戳記, ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss']).format('MM/DD');
           msg += `${i + 1}. ${r.作業項目}\n   📅 ${dateStr}\n\n`;
