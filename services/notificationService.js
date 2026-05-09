@@ -17,11 +17,54 @@ if (process.env.LINE_CHANNEL_ACCESS_TOKEN && process.env.LINE_CHANNEL_ACCESS_TOK
 }
 
 const homeworkService = require('./homeworkService');
+const aiService = require('./aiService');
+
+// ─────────────────────────────────────────────
+// 班級週報：勵志語資料庫（中英文配對算一句）
+// ─────────────────────────────────────────────
+const STUDENT_ENCOURAGEMENTS = [
+  // 穩定進步型
+  `規律是學習最強大的燃料，感謝你這週展現的穩定節奏。🚀\nConsistency is the ultimate fuel for learning. Thank you for maintaining such a steady rhythm this week. ⛽`,
+  `每一天的數據累積，都在為未來的突破點構建最堅實的底層邏輯。📊\nEvery day of data accumulation builds a solid logical foundation for your future breakthroughs. 🏗️`,
+  // 遇到挑戰型
+  `學習曲線從來不是直線，目前的微調是為了下一階段的跳躍做準備。📈\nThe learning curve is never a straight line; these minor adjustments are simply preparing you for the next leap forward. 🪜`,
+  `我們不追求一步登天，只追求比昨天的數據更精進一點點。🎯\nWe don't aim for overnight success; we aim for being slightly more precise than yesterday's data. 🔍`,
+  // 表現優異型
+  `卓越不是一個行為，而是一種習慣。很高興看見你將卓越變成了日常。🏆\nExcellence is not an act, but a habit. It's wonderful to see excellence becoming your daily standard. ✨`,
+  `當你掌握了學習的邏輯，世界就沒有什麼能難倒你的知識。🌍\nOnce you master the logic of learning, no knowledge in the world can stand in your way. 💡`,
+];
+
+const PARENT_ENCOURAGEMENTS = [
+  `每一次的現場投入，都是在為孩子的學習信心存入一筆資產。💎\nEvery moment of on-site engagement is a direct investment into your child's learning confidence. 🏦`,
+  `讓孩子看見堅持的力量，就是我們能給他最好的科學教育。🤝\nShowing children the power of persistence is the finest scientific education we can provide. 🧬`,
+];
+
+const ATOMIC_POWER = `⚛️ 每天進步 1%，一年後你將強大 37 倍。微小的正向行為，將透過時間產生巨大的原子連鎖反應。\n"Improving by just 1% every day makes you 37 times better by the end of the year. Tiny positive actions trigger massive atomic chain reactions over time."`;
+
+// ─────────────────────────────────────────────
+// 工具函式
+// ─────────────────────────────────────────────
+
+/**
+ * 遮蔽中文名字（只取中文字，中間換成 O）
+ * 張艾菲 Effie → 張O菲
+ * 李明 → 李O
+ */
+function maskChineseName(fullName) {
+  const cn = (fullName || '').replace(/[^一-鿿]/g, '');
+  if (cn.length === 0) return fullName;
+  if (cn.length === 1) return cn;
+  if (cn.length === 2) return cn[0] + 'O';
+  return cn[0] + 'O' + cn[cn.length - 1];
+}
+
+function randomFrom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
 
 class NotificationService {
   /**
-   * 從 parent-pairs.json 取得某學生所有配對的家長 LINE User ID
-   * 支援爸媽同時配對同一學生（多對一）
+   * 從 parent-pairs.json 取得某學生所有配對的家長 LINE ID
    */
   getParentLineUserIds(studentName) {
     const pairsFile = path.join(__dirname, '..', 'parent-pairs.json');
@@ -40,7 +83,7 @@ class NotificationService {
   }
 
   /**
-   * 通知家長作業完成（支援多位家長同時收到）
+   * 通知家長（即時，目前保留但實際上不再從 /api/homework 呼叫）
    */
   async notifyParent(studentName, homeworkItem, completedTime, photoUrl) {
     if (!client) {
@@ -49,142 +92,49 @@ class NotificationService {
     }
 
     try {
-      // 先從 parent-pairs.json 取得所有配對的家長 ID
       let lineUserIds = this.getParentLineUserIds(studentName);
-
-      // 若 parent-pairs.json 沒有資料，fallback 到 Google Sheets（支援逗號分隔多位家長）
       if (lineUserIds.length === 0) {
         const fallbackStr = await homeworkService.getParentLineUserId(studentName);
         if (fallbackStr) {
           lineUserIds = fallbackStr.split(',').map(s => s.trim()).filter(Boolean);
         }
       }
-
       if (lineUserIds.length === 0) {
-        console.warn(`找不到學生 ${studentName} 的家長LINE ID`);
         return { success: false, message: '找不到家長LINE ID' };
       }
 
-      // 格式化完成時間
       const timeFormatted = completedTime
         ? moment(completedTime).format('YYYY年MM月DD日 HH:mm')
         : moment().format('YYYY年MM月DD日 HH:mm');
 
-      // 建立訊息（有照片則附上連結）
       let messageText = `🎉 學習進度通知 🎉\n\n${studentName} 已完成以下進度：\n\n📚 ${homeworkItem}\n\n⏰ 完成時間：${timeFormatted}`;
       if (photoUrl) {
         messageText += `\n\n📷 進度照片：\n${photoUrl}`;
       }
-      const encouragements = [
-        `🐾 "Every small step you take brings you closer to your goal. Keep going!" 🚀\n（你邁出的每一個小步伐，都讓你離目標更近。繼續前進吧！）`,
-        `🌟 "Believe in yourself and all that you are. You are stronger than you think." 💪\n（相信自己以及你所擁有的一切。你比你想像的還要強大。）`,
-        `🌱 "Kid's hard work will pay off. Stay positive and keep shining!" ✨\n（孩子的努力會有回報的。保持正面，繼續閃耀！）`,
-      ];
-      const randomMsg = encouragements[Math.floor(Math.random() * encouragements.length)];
-      messageText += `\n\n✅ 孩子很努力！感謝您的肯定與鼓勵 🙏\n${randomMsg}`;
-      
-      const message = { type: 'text', text: messageText };
+      messageText += `\n\n✅ 孩子很努力！感謝您的肯定與鼓勵 🙏`;
 
-      // 發送給所有配對的家長
+      const message = { type: 'text', text: messageText };
       const results = [];
       for (const uid of lineUserIds) {
         try {
           await client.pushMessage(uid, message);
-          console.log(`   ✅ 已發送給 ${uid}（${studentName} 的家長）`);
           results.push({ userId: uid, success: true });
         } catch (e) {
           const lineError = e.response?.data || e.response?.body || e.message;
           const statusCode = e.response?.status || e.statusCode || 'unknown';
-          console.error(`   ❌ 發送給 ${uid} 失敗 [HTTP ${statusCode}]:`, JSON.stringify(lineError));
           results.push({ userId: uid, success: false, error: `HTTP ${statusCode}: ${JSON.stringify(lineError)}` });
         }
       }
-
       const successCount = results.filter(r => r.success).length;
-      return {
-        success: successCount > 0,
-        message: `已發送給 ${successCount}/${lineUserIds.length} 位家長`,
-        results,
-      };
+      return { success: successCount > 0, message: `已發送給 ${successCount}/${lineUserIds.length} 位家長`, results };
     } catch (error) {
-      console.error('發送通知錯誤:', error);
       throw new Error(`發送通知失敗: ${error.message}`);
     }
   }
 
   /**
-   * 發送每日摘要給所有家長
-   */
-  async sendDailySummary(date) {
-    try {
-      const targetDate = date || moment().format('YYYY-MM-DD');
-      const records = await homeworkService.getHomeworkByDate(targetDate);
-
-      if (records.length === 0) {
-        console.log(`日期 ${targetDate} 沒有作業記錄`);
-        return { success: true, message: '當日無作業記錄' };
-      }
-
-      // 依學生分組
-      const groupedByStudent = {};
-      records.forEach(record => {
-        if (!groupedByStudent[record.學生姓名]) {
-          groupedByStudent[record.學生姓名] = [];
-        }
-        groupedByStudent[record.學生姓名].push(record);
-      });
-
-      // 發送給每位學生的所有家長
-      const results = [];
-      for (const [studentName, studentRecords] of Object.entries(groupedByStudent)) {
-        // 先從 parent-pairs.json 取得所有配對的家長 ID
-        let lineUserIds = this.getParentLineUserIds(studentName);
-
-        // fallback 到 Google Sheets（支援逗號分隔多位家長）
-        if (lineUserIds.length === 0) {
-          const fallbackStr = await homeworkService.getParentLineUserId(studentName);
-          if (fallbackStr) {
-            lineUserIds = fallbackStr.split(',').map(s => s.trim()).filter(Boolean);
-          }
-        }
-
-        if (lineUserIds.length === 0) {
-          results.push({ studentName, success: false, message: '找不到LINE ID' });
-          continue;
-        }
-
-        // 建立摘要訊息
-        let msgText = `【${moment(targetDate).format('YYYY年MM月DD日')} 學習進度摘要】\n\n${studentName}今日完成：\n\n`;
-        studentRecords.forEach((record, index) => {
-          msgText += `${index + 1}. ${record.作業項目}\n   ⏰ ${record.完成時間}\n\n`;
-        });
-        msgText += `共完成 ${studentRecords.length} 項進度\n\n感謝您的關注！`;
-
-        // 發送給所有配對的家長
-        for (const uid of lineUserIds) {
-          try {
-            await client.pushMessage(uid, { type: 'text', text: msgText });
-            results.push({ studentName, userId: uid, success: true });
-          } catch (error) {
-            console.error(`發送摘要給 ${studentName}（${uid}）錯誤:`, error);
-            results.push({ studentName, userId: uid, success: false, error: error.message });
-          }
-        }
-      }
-
-      return {
-        success: true,
-        message: `摘要發送完成：${results.filter(r => r.success).length}/${results.length} 位家長`,
-        results,
-      };
-    } catch (error) {
-      console.error('發送每日摘要錯誤:', error);
-      throw new Error(`發送每日摘要失敗: ${error.message}`);
-    }
-  }
-
-  /**
-   * 發送週摘要（週三送週一~三；週六送週四~六）
+   * 發送個人學習進度週報（週四早上10點 / 週六晚上6點）
+   * 週六版本額外加入 AI 分析整週（Mon-Sat）學習習慣
    * startDate / endDate 格式：'YYYY-MM-DD'
    */
   async sendWeeklySummary(startDate, endDate) {
@@ -196,11 +146,21 @@ class NotificationService {
       const records = await homeworkService.getHomeworkByDateRange(startDate, endDate);
 
       if (records.length === 0) {
-        console.log(`[週摘要] ${startDate} ~ ${endDate} 無作業記錄`);
-        return { success: true, message: '此區間無作業記錄', sent: 0 };
+        console.log(`[週摘要] ${startDate} ~ ${endDate} 無學習記錄`);
+        return { success: true, message: '此區間無學習記錄', sent: 0 };
       }
 
-      // 依學生分組
+      // 判斷是否為週六版本（需附 AI 分析）
+      const isSaturday = moment(endDate).day() === 6;
+
+      // 若是週六，同時撈整週資料（Mon-Sat）供 AI 分析
+      let fullWeekRecords = [];
+      if (isSaturday) {
+        const weekStart = moment(startDate).subtract(3, 'days').format('YYYY-MM-DD'); // Mon
+        fullWeekRecords = await homeworkService.getHomeworkByDateRange(weekStart, endDate);
+      }
+
+      // 依學生分組（本期記錄）
       const grouped = {};
       records.forEach(r => {
         if (!grouped[r.學生姓名]) grouped[r.學生姓名] = [];
@@ -212,7 +172,6 @@ class NotificationService {
       const results  = [];
 
       for (const [studentName, items] of Object.entries(grouped)) {
-        // 取得家長 LINE ID（先查 parent-pairs.json，再 fallback Sheets）
         let lineUserIds = this.getParentLineUserIds(studentName);
         if (lineUserIds.length === 0) {
           const fallbackStr = await homeworkService.getParentLineUserId(studentName);
@@ -220,27 +179,30 @@ class NotificationService {
             lineUserIds = fallbackStr.split(',').map(s => s.trim()).filter(Boolean);
           }
         }
-
         if (lineUserIds.length === 0) {
           results.push({ studentName, success: false, message: '找不到LINE ID' });
           continue;
         }
 
-        // 建立週摘要訊息
+        // 本期進度列表
         let msg = `📋【${startFmt}～${endFmt} 學習進度週報】\n\n`;
         msg += `${studentName} 本期完成：\n\n`;
         items.forEach((r, i) => {
           const dateStr = moment(r.時間戳記, ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss']).format('MM/DD');
           msg += `${i + 1}. ${r.作業項目}\n   📅 ${dateStr}\n\n`;
         });
-        msg += `✅ 共完成 ${items.length} 項進度\n`;
+        msg += `✅ 共完成 ${items.length} 項進度`;
 
-        const encouragements = [
-          `🐾 "Every small step you take brings you closer to your goal. Keep going!" 🚀\n（你邁出的每一個小步伐，都讓你離目標更近。繼續前進吧！）`,
-          `🌟 "Believe in yourself and all that you are. You are stronger than you think." 💪\n（相信自己以及你所擁有的一切。你比你想像的還要強大。）`,
-          `🌱 "Kid's hard work will pay off. Stay positive and keep shining!" ✨\n（孩子的努力會有回報的。保持正面，繼續閃耀！）`,
-        ];
-        msg += `\n${encouragements[Math.floor(Math.random() * encouragements.length)]}\n\n感謝您的關注 🙏`;
+        // 週六版本：加入 AI 個人分析
+        if (isSaturday) {
+          const studentWeekRecords = fullWeekRecords.filter(r => r.學生姓名 === studentName);
+          const aiComment = await aiService.analyzeStudentProgress(studentName, studentWeekRecords);
+          if (aiComment) {
+            msg += `\n\n────────────────\n🤖 AI 老師本週觀察\n\n${aiComment}`;
+          }
+        }
+
+        msg += `\n\n感謝您的關注 🙏`;
 
         for (const uid of lineUserIds) {
           try {
@@ -268,30 +230,185 @@ class NotificationService {
   }
 
   /**
-   * 批量通知（使用LINE Broadcast API，需升級至Premium帳號）
+   * 發送班級學習進度週報（每週日 11:58）
+   * 涵蓋整週（Mon-Sat），依年級分組發送給全年級已配對家長
+   * 學生姓名以中文遮蔽（張O菲）
    */
-  async broadcastMessage(messageText) {
+  async sendClassWeeklySummary(startDate, endDate) {
     if (!client) {
-      console.warn('LINE Bot 未設定，無法發送廣播訊息');
       return { success: false, message: 'LINE Bot 未設定（預覽模式）' };
     }
 
     try {
-      // 注意：Broadcast API 需要 Premium 帳號
-      // 這裡提供基本實作，實際使用時需確認帳號等級
-      await client.broadcast({
-        type: 'text',
-        text: messageText,
+      // 取得所有學生（含年級）
+      const allStudents = await homeworkService.getAllStudents();
+      // 取得本週所有作業記錄
+      const records = await homeworkService.getHomeworkByDateRange(startDate, endDate);
+
+      if (records.length === 0) {
+        console.log(`[班級週報] ${startDate} ~ ${endDate} 無學習記錄`);
+        return { success: true, message: '此區間無學習記錄', sent: 0 };
+      }
+
+      // 依學生姓名 → 年級的對照表
+      const gradeMap = {};
+      allStudents.forEach(s => {
+        if (s.grade) gradeMap[s.studentName] = String(s.grade);
       });
 
+      // 取得所有出現在記錄中的年級
+      const grades = [...new Set(
+        records
+          .map(r => gradeMap[r.學生姓名])
+          .filter(Boolean)
+      )].sort();
+
+      const startFmt = moment(startDate).format('MM/DD');
+      const endFmt   = moment(endDate).format('MM/DD');
+      const allResults = [];
+
+      for (const grade of grades) {
+        // 該年級的學生名單
+        const studentsInGrade = allStudents.filter(s => String(s.grade) === grade);
+        // 該年級本週的記錄
+        const gradeRecords = records.filter(r => gradeMap[r.學生姓名] === grade);
+
+        // 依學生分組記錄
+        const byStudent = {};
+        gradeRecords.forEach(r => {
+          if (!byStudent[r.學生姓名]) byStudent[r.學生姓名] = [];
+          byStudent[r.學生姓名].push(r);
+        });
+
+        // 依日期分組（每位學生）
+        const studentLines = Object.entries(byStudent).map(([name, recs]) => {
+          const masked = maskChineseName(name);
+          const byDate = {};
+          recs.forEach(r => {
+            const d = moment(r.時間戳記, ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss']).format('MM/DD');
+            if (!byDate[d]) byDate[d] = [];
+            byDate[d].push(r.作業項目);
+          });
+          const lines = Object.entries(byDate)
+            .map(([d, items]) => `  ${d}　${items.join('、')}`)
+            .join('\n');
+          return `${masked}\n${lines}`;
+        });
+
+        // 統計
+        const reportStudentCount = Object.keys(byStudent).length;
+        const totalItems = gradeRecords.length;
+
+        // 組合訊息
+        let msg = `📊【${startFmt}～${endFmt} 班級學習進度摘要】（${grade}年級）\n\n`;
+        msg += studentLines.join('\n\n');
+        msg += `\n\n────────────────\n`;
+        msg += `📈 本週共 ${reportStudentCount} 位同學回報進度，合計 ${totalItems} 項\n\n`;
+        msg += randomFrom(STUDENT_ENCOURAGEMENTS);
+        msg += `\n\n${randomFrom(PARENT_ENCOURAGEMENTS)}`;
+        msg += `\n\n${ATOMIC_POWER}`;
+
+        // 收集該年級所有已配對家長的 LINE ID（不重複）
+        const allLineIds = new Set();
+        for (const student of studentsInGrade) {
+          const fromPairs = this.getParentLineUserIds(student.studentName);
+          if (fromPairs.length > 0) {
+            fromPairs.forEach(id => allLineIds.add(id));
+          } else if (student.lineUserId) {
+            student.lineUserId.split(',').map(s => s.trim()).filter(Boolean).forEach(id => allLineIds.add(id));
+          }
+        }
+
+        if (allLineIds.size === 0) {
+          console.warn(`[班級週報] ${grade}年級 無已配對家長`);
+          continue;
+        }
+
+        console.log(`[班級週報] ${grade}年級 → 發送給 ${allLineIds.size} 個 LINE ID`);
+
+        for (const uid of allLineIds) {
+          try {
+            await client.pushMessage(uid, { type: 'text', text: msg });
+            allResults.push({ grade, userId: uid, success: true });
+          } catch (e) {
+            console.error(`[班級週報] ❌ ${grade}年級 發送失敗 ${uid}:`, e.message);
+            allResults.push({ grade, userId: uid, success: false, error: e.message });
+          }
+        }
+      }
+
+      const successCount = allResults.filter(r => r.success).length;
+      return {
+        success: true,
+        message: `班級週報發送完成：${successCount}/${allResults.length}`,
+        period: `${startDate} ~ ${endDate}`,
+        grades,
+        results: allResults,
+      };
+    } catch (error) {
+      console.error('[班級週報] 錯誤:', error);
+      throw new Error(`發送班級週報失敗: ${error.message}`);
+    }
+  }
+
+  /**
+   * 發送每日摘要（保留備用）
+   */
+  async sendDailySummary(date) {
+    try {
+      const targetDate = date || moment().format('YYYY-MM-DD');
+      const records = await homeworkService.getHomeworkByDate(targetDate);
+      if (records.length === 0) {
+        return { success: true, message: '當日無學習記錄' };
+      }
+      const groupedByStudent = {};
+      records.forEach(record => {
+        if (!groupedByStudent[record.學生姓名]) groupedByStudent[record.學生姓名] = [];
+        groupedByStudent[record.學生姓名].push(record);
+      });
+      const results = [];
+      for (const [studentName, studentRecords] of Object.entries(groupedByStudent)) {
+        let lineUserIds = this.getParentLineUserIds(studentName);
+        if (lineUserIds.length === 0) {
+          const fallbackStr = await homeworkService.getParentLineUserId(studentName);
+          if (fallbackStr) lineUserIds = fallbackStr.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        if (lineUserIds.length === 0) {
+          results.push({ studentName, success: false, message: '找不到LINE ID' });
+          continue;
+        }
+        let msgText = `【${moment(targetDate).format('YYYY年MM月DD日')} 學習進度摘要】\n\n${studentName}今日完成：\n\n`;
+        studentRecords.forEach((record, index) => {
+          msgText += `${index + 1}. ${record.作業項目}\n   ⏰ ${record.完成時間}\n\n`;
+        });
+        msgText += `共完成 ${studentRecords.length} 項進度\n\n感謝您的關注！`;
+        for (const uid of lineUserIds) {
+          try {
+            await client.pushMessage(uid, { type: 'text', text: msgText });
+            results.push({ studentName, userId: uid, success: true });
+          } catch (error) {
+            results.push({ studentName, userId: uid, success: false, error: error.message });
+          }
+        }
+      }
+      return { success: true, message: `摘要發送完成：${results.filter(r => r.success).length}/${results.length} 位家長`, results };
+    } catch (error) {
+      throw new Error(`發送每日摘要失敗: ${error.message}`);
+    }
+  }
+
+  /**
+   * 批量廣播（需 Premium 帳號）
+   */
+  async broadcastMessage(messageText) {
+    if (!client) return { success: false, message: 'LINE Bot 未設定（預覽模式）' };
+    try {
+      await client.broadcast({ type: 'text', text: messageText });
       return { success: true, message: '廣播訊息已發送' };
     } catch (error) {
-      console.error('廣播訊息錯誤:', error);
       throw new Error(`廣播訊息失敗: ${error.message}`);
     }
   }
 }
 
 module.exports = new NotificationService();
-
-

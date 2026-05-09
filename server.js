@@ -354,6 +354,32 @@ app.post('/api/weekly-summary', async (req, res) => {
   }
 });
 
+// API: 發送班級學習進度週報（每週日 11:58，涵蓋 Mon-Sat）
+app.post('/api/class-weekly-summary', async (req, res) => {
+  try {
+    const moment = require('moment');
+    const now = moment().utcOffset('+08:00');
+
+    let startDate, endDate;
+
+    if (req.body.startDate && req.body.endDate) {
+      startDate = req.body.startDate;
+      endDate   = req.body.endDate;
+    } else {
+      // 週日：送本週一~六
+      startDate = now.clone().day(1).format('YYYY-MM-DD');
+      endDate   = now.clone().day(6).format('YYYY-MM-DD');
+    }
+
+    console.log(`[class-weekly-summary] 發送 ${startDate} ~ ${endDate} 的班級週報`);
+    const result = await notificationService.sendClassWeeklySummary(startDate, endDate);
+    res.json(result);
+  } catch (e) {
+    console.error('[class-weekly-summary] 錯誤:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // API: 發送每日摘要
 app.post('/api/daily-summary', async (req, res) => {
   try {
