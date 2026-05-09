@@ -71,7 +71,7 @@ class NotificationService {
         : moment().format('YYYY年MM月DD日 HH:mm');
 
       // 建立訊息（有照片則附上連結）
-      let messageText = `🎉 作業完成通知 🎉\n\n👦 ${studentName} 已完成以下作業：\n\n📚 ${homeworkItem}\n\n⏰ 完成時間：${timeFormatted}`;
+      let messageText = `🎉 學習進度通知 🎉\n\n👦 ${studentName} 已完成以下作業：\n\n📚 ${homeworkItem}\n\n⏰ 完成時間：${timeFormatted}`;
       if (photoUrl) {
         messageText += `\n\n📷 作業照片：\n${photoUrl}`;
       }
