@@ -380,6 +380,31 @@ app.post('/api/class-weekly-summary', async (req, res) => {
   }
 });
 
+// API: 發送 AI 個人學習分析（週日 11:59，分析整週 Mon-Sat）
+app.post('/api/ai-weekly-analysis', async (req, res) => {
+  try {
+    const moment = require('moment');
+    const now = moment().utcOffset('+08:00');
+
+    let startDate, endDate;
+    if (req.body.startDate && req.body.endDate) {
+      startDate = req.body.startDate;
+      endDate   = req.body.endDate;
+    } else {
+      // 週日：分析本週一～六
+      startDate = now.clone().day(1).format('YYYY-MM-DD');
+      endDate   = now.clone().day(6).format('YYYY-MM-DD');
+    }
+
+    console.log(`[ai-weekly-analysis] 發送 ${startDate} ~ ${endDate} 的 AI 個人分析`);
+    const result = await notificationService.sendAIWeeklyAnalysis(startDate, endDate);
+    res.json(result);
+  } catch (e) {
+    console.error('[ai-weekly-analysis] 錯誤:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // API: 發送每日摘要
 app.post('/api/daily-summary', async (req, res) => {
   try {

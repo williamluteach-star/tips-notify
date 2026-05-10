@@ -150,16 +150,6 @@ class NotificationService {
         return { success: true, message: '此區間無學習記錄', sent: 0 };
       }
 
-      // 判斷是否為週六版本（需附 AI 分析）
-      const isSaturday = moment(endDate).day() === 6;
-
-      // 若是週六，同時撈整週資料（Mon-Sat）供 AI 分析
-      let fullWeekRecords = [];
-      if (isSaturday) {
-        const weekStart = moment(startDate).subtract(3, 'days').format('YYYY-MM-DD'); // Mon
-        fullWeekRecords = await homeworkService.getHomeworkByDateRange(weekStart, endDate);
-      }
-
       // 依學生分組（本期記錄）
       const grouped = {};
       records.forEach(r => {
@@ -191,18 +181,7 @@ class NotificationService {
           const dateStr = moment(r.時間戳記, ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss']).format('MM/DD');
           msg += `${i + 1}. ${r.作業項目}\n   📅 ${dateStr}\n\n`;
         });
-        msg += `✅ 共完成 ${items.length} 項進度`;
-
-        // 週六版本：加入 AI 個人分析
-        if (isSaturday) {
-          const studentWeekRecords = fullWeekRecords.filter(r => r.學生姓名 === studentName);
-          const aiComment = await aiService.analyzeStudentProgress(studentName, studentWeekRecords);
-          if (aiComment) {
-            msg += `\n\n────────────────\n🤖 AI 老師本週觀察\n\n${aiComment}`;
-          }
-        }
-
-        msg += `\n\n感謝您的關注 🙏`;
+        msg += `✅ 共完成 ${items.length} 項進度\n\n感謝您的關注 🙏`;
 
         for (const uid of lineUserIds) {
           try {
@@ -348,6 +327,82 @@ class NotificationService {
     } catch (error) {
       console.error('[班級週報] 錯誤:', error);
       throw new Error(`發送班級週報失敗: ${error.message}`);
+    }
+  }
+
+  /**
+   * 發送 AI 個人學習分析（每週日 11:59，分析整週 Mon-Sat）
+   * 發給每位學生自己的家長
+   */
+  async sendAIWeeklyAnalysis(startDate, endDate) {
+    if (!client) {
+      return { success: false, message: 'LINE Bot 未設定（預覽模式）' };
+    }
+
+    try {
+      const records = await homeworkService.getHomeworkByDateRange(startDate, endDate);
+
+      if (records.length === 0) {
+        console.log(`[AI分析] ${startDate} ~ ${endDate} 無學習記錄`);
+        return { success: true, message: '此區間無學習記錄', sent: 0 };
+      }
+
+      // 依學生分組
+      const grouped = {};
+      records.forEach(r => {
+        if (!grouped[r.學生姓名]) grouped[r.學生姓名] = [];
+        grouped[r.學生姓名].push(r);
+      });
+
+      const startFmt = moment(startDate).format('MM/DD');
+      const endFmt   = moment(endDate).format('MM/DD');
+      const results  = [];
+
+      for (const [studentName, weekRecords] of Object.entries(grouped)) {
+        let lineUserIds = this.getParentLineUserIds(studentName);
+        if (lineUserIds.length === 0) {
+          const fallbackStr = await homeworkService.getParentLineUserId(studentName);
+          if (fallbackStr) {
+            lineUserIds = fallbackStr.split(',').map(s => s.trim()).filter(Boolean);
+          }
+        }
+        if (lineUserIds.length === 0) {
+          results.push({ studentName, success: false, message: '找不到LINE ID' });
+          continue;
+        }
+
+        // 呼叫 AI 分析
+        const aiComment = await aiService.analyzeStudentProgress(studentName, weekRecords);
+        if (!aiComment) {
+          console.warn(`[AI分析] ${studentName} AI 分析失敗，略過`);
+          results.push({ studentName, success: false, message: 'AI 分析失敗' });
+          continue;
+        }
+
+        const msg = `🤖【${startFmt}～${endFmt} AI 老師本週觀察】\n\n${studentName}\n\n${aiComment}\n\n感謝您的關注 🙏`;
+
+        for (const uid of lineUserIds) {
+          try {
+            await client.pushMessage(uid, { type: 'text', text: msg });
+            console.log(`[AI分析] ✅ 已發送給 ${studentName} 的家長（${uid}）`);
+            results.push({ studentName, userId: uid, success: true });
+          } catch (e) {
+            console.error(`[AI分析] ❌ 發送失敗 ${uid}:`, e.message);
+            results.push({ studentName, userId: uid, success: false, error: e.message });
+          }
+        }
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      return {
+        success: true,
+        message: `AI 分析發送完成：${successCount}/${results.length} 位家長`,
+        period: `${startDate} ~ ${endDate}`,
+        results,
+      };
+    } catch (error) {
+      console.error('[AI分析] 錯誤:', error);
+      throw new Error(`發送 AI 分析失敗: ${error.message}`);
     }
   }
 
