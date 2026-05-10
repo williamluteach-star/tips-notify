@@ -633,6 +633,135 @@ class HomeworkService {
       throw new Error(`取得日期作業記錄失敗: ${error.message}`);
     }
   }
+  /**
+   * 儲存 AI 評語到「AI評語待審」工作表
+   * 欄位：A=週期, B=學生姓名, C=AI原始評語, D=最終評語, E=狀態, F=產生時間
+   */
+  async saveAIAnalysis({ period, studentName, aiText }) {
+    if (!this.sheets) await this.init();
+    if (!this.sheets) return null;
+
+    const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+    try {
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: 'AI評語待審!A2',
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+        resource: { values: [[period, studentName, aiText, aiText, '待審', timestamp]] },
+      });
+      return { period, studentName };
+    } catch (error) {
+      if (error.message?.includes('Unable to parse range')) {
+        console.warn('[GSheets] 「AI評語待審」工作表不存在，請先手動新增。');
+      } else {
+        console.error('儲存 AI 評語錯誤:', error.message);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * 取得指定週期的所有 AI 評語
+   */
+  async getAIAnalyses(period) {
+    if (!this.sheets) await this.init();
+    if (!this.sheets) return [];
+
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'AI評語待審!A2:F',
+      });
+
+      return (response.data.values || [])
+        .filter(row => row[0] === period)
+        .map((row, i) => ({
+          rowIndex: i, // 相對索引，不可靠，用 studentName 比對
+          period: row[0] || '',
+          studentName: row[1] || '',
+          aiText: row[2] || '',
+          finalText: row[3] || row[2] || '',
+          status: row[4] || '待審',
+          createdAt: row[5] || '',
+        }));
+    } catch (error) {
+      if (error.message?.includes('Unable to parse range')) {
+        console.warn('[GSheets] 「AI評語待審」工作表不存在。');
+        return [];
+      }
+      console.error('取得 AI 評語錯誤:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * 更新某學生的最終評語（老師修改後）
+   */
+  async updateAIAnalysisFinal(period, studentName, finalText) {
+    if (!this.sheets) await this.init();
+    if (!this.sheets) return null;
+
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'AI評語待審!A2:F',
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row[0] === period && row[1] === studentName);
+      if (rowIndex === -1) return null;
+
+      const sheetRow = rowIndex + 2;
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `AI評語待審!D${sheetRow}`,
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: [[finalText]] },
+      });
+      return { period, studentName, finalText };
+    } catch (error) {
+      console.error('更新 AI 評語錯誤:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * 標記某週期所有評語為已發送
+   */
+  async markAIAnalysesSent(period) {
+    if (!this.sheets) await this.init();
+    if (!this.sheets) return null;
+
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'AI評語待審!A2:F',
+      });
+
+      const rows = response.data.values || [];
+      const updates = rows
+        .map((row, i) => ({ row, sheetRow: i + 2 }))
+        .filter(({ row }) => row[0] === period && row[4] !== '已發送');
+
+      if (updates.length === 0) return null;
+
+      const data = updates.map(({ sheetRow }) => ({
+        range: `AI評語待審!E${sheetRow}`,
+        values: [['已發送']],
+      }));
+
+      await this.sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        resource: { valueInputOption: 'USER_ENTERED', data },
+      });
+
+      return { updated: updates.length };
+    } catch (error) {
+      console.error('標記已發送錯誤:', error.message);
+      return null;
+    }
+  }
 }
 
 module.exports = new HomeworkService();

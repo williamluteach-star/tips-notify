@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 評語審核 - 英典教育</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f4f8; color: #2d3748; }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white; padding: 20px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .header h1 { font-size: 20px; font-weight: 700; }
+    .header .period { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+
+    .toolbar {
+      background: white; padding: 14px 24px;
+      display: flex; align-items: center; gap: 12px;
+      border-bottom: 1px solid #e2e8f0; flex-wrap: wrap;
+    }
+    .toolbar label { font-size: 13px; color: #718096; }
+    .toolbar input[type="date"] {
+      border: 1px solid #cbd5e0; border-radius: 8px;
+      padding: 6px 10px; font-size: 13px; color: #2d3748;
+    }
+    .btn {
+      padding: 8px 18px; border-radius: 8px; border: none;
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity .2s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: #667eea; color: white; }
+    .btn-success { background: #48bb78; color: white; }
+    .btn-danger  { background: #f56565; color: white; }
+    .btn-sm { padding: 5px 12px; font-size: 13px; }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .status-bar {
+      padding: 10px 24px; font-size: 13px; color: #718096;
+      background: #edf2f7; border-bottom: 1px solid #e2e8f0;
+    }
+
+    .container { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+
+    .empty { text-align: center; padding: 60px 0; color: #a0aec0; }
+    .empty .icon { font-size: 48px; margin-bottom: 12px; }
+
+    .card {
+      background: white; border-radius: 12px; padding: 20px;
+      margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      border-left: 4px solid #667eea;
+    }
+    .card.sent { border-left-color: #48bb78; opacity: .7; }
+
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .student-name { font-size: 17px; font-weight: 700; }
+    .badge {
+      font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 600;
+    }
+    .badge-pending { background: #fef3c7; color: #92400e; }
+    .badge-sent    { background: #d1fae5; color: #065f46; }
+
+    .ai-label { font-size: 12px; color: #718096; margin-bottom: 6px; }
+    textarea {
+      width: 100%; border: 1px solid #e2e8f0; border-radius: 8px;
+      padding: 10px 12px; font-size: 14px; line-height: 1.6;
+      resize: vertical; min-height: 100px; color: #2d3748;
+      font-family: inherit; transition: border-color .2s;
+    }
+    textarea:focus { outline: none; border-color: #667eea; }
+    textarea:disabled { background: #f7fafc; color: #718096; }
+
+    .card-footer {
+      display: flex; align-items: center; justify-content: flex-end;
+      gap: 8px; margin-top: 10px;
+    }
+    .saved-hint { font-size: 12px; color: #48bb78; display: none; }
+
+    .send-all-bar {
+      position: sticky; bottom: 0; background: white;
+      border-top: 1px solid #e2e8f0; padding: 14px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 -2px 8px rgba(0,0,0,.06);
+    }
+    .send-all-bar .info { font-size: 13px; color: #718096; }
+
+    .toast {
+      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+      background: #2d3748; color: white; padding: 10px 20px;
+      border-radius: 8px; font-size: 14px; display: none; z-index: 999;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>🤖 AI 評語審核</h1>
+    <div class="period" id="periodLabel">載入中…</div>
+  </div>
+</div>
+
+<div class="toolbar">
+  <label>週期起：</label>
+  <input type="date" id="startDate">
+  <label>～</label>
+  <input type="date" id="endDate">
+  <button class="btn btn-primary btn-sm" onclick="loadAnalyses()">載入</button>
+</div>
+
+<div class="status-bar" id="statusBar">請選擇週期後點「載入」</div>
+
+<div class="container" id="container">
+  <div class="empty"><div class="icon">📋</div><div>尚未載入評語</div></div>
+</div>
+
+<div class="send-all-bar">
+  <div class="info" id="pendingCount">—</div>
+  <button class="btn btn-success" id="sendAllBtn" onclick="sendAll()" disabled>發送全部給家長</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  let currentPeriod = '';
+  let analyses = [];
+
+  // 預設填入本週一～六
+  (function initDates() {
+    const today = new Date();
+    const day = today.getDay(); // 0=Sun
+    const mon = new Date(today);
+    mon.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
+    const sat = new Date(mon);
+    sat.setDate(mon.getDate() + 5);
+    const fmt = d => d.toISOString().slice(0, 10);
+    document.getElementById('startDate').value = fmt(mon);
+    document.getElementById('endDate').value   = fmt(sat);
+  })();
+
+  async function loadAnalyses() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate   = document.getElementById('endDate').value;
+    if (!startDate || !endDate) return showToast('請選擇週期');
+
+    currentPeriod = `${startDate}~${endDate}`;
+    document.getElementById('periodLabel').textContent = `${startDate} ～ ${endDate}`;
+    document.getElementById('statusBar').textContent = '載入中…';
+
+    try {
+      const res = await fetch(`/api/ai-analyses?startDate=${startDate}&endDate=${endDate}`);
+      const data = await res.json();
+      analyses = data.analyses || [];
+      render();
+    } catch (e) {
+      document.getElementById('statusBar').textContent = '載入失敗：' + e.message;
+    }
+  }
+
+  function render() {
+    const container = document.getElementById('container');
+    const pending = analyses.filter(a => a.status !== '已發送');
+
+    document.getElementById('statusBar').textContent =
+      `共 ${analyses.length} 位學生，${pending.length} 位待發送`;
+    document.getElementById('pendingCount').textContent =
+      `${pending.length} 位待發送`;
+    document.getElementById('sendAllBtn').disabled = pending.length === 0;
+
+    if (analyses.length === 0) {
+      container.innerHTML = `<div class="empty"><div class="icon">📭</div><div>此週期尚無 AI 評語</div></div>`;
+      return;
+    }
+
+    container.innerHTML = analyses.map((a, i) => `
+      <div class="card ${a.status === '已發送' ? 'sent' : ''}" id="card-${i}">
+        <div class="card-header">
+          <div class="student-name">${a.studentName}</div>
+          <span class="badge ${a.status === '已發送' ? 'badge-sent' : 'badge-pending'}">
+            ${a.status === '已發送' ? '✅ 已發送' : '⏳ 待審核'}
+          </span>
+        </div>
+        <div class="ai-label">最終評語（可直接修改）</div>
+        <textarea id="text-${i}" ${a.status === '已發送' ? 'disabled' : ''}
+          onchange="markDirty(${i})">${a.finalText}</textarea>
+        <div class="card-footer">
+          <span class="saved-hint" id="hint-${i}">已儲存</span>
+          ${a.status !== '已發送' ? `<button class="btn btn-primary btn-sm" onclick="saveOne(${i})">儲存</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function markDirty(i) {
+    document.getElementById(`hint-${i}`).style.display = 'none';
+  }
+
+  async function saveOne(i) {
+    const a = analyses[i];
+    const finalText = document.getElementById(`text-${i}`).value.trim();
+    if (!finalText) return showToast('評語不能為空');
+
+    try {
+      const res = await fetch(`/api/ai-analyses/${encodeURIComponent(a.studentName)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period: currentPeriod, finalText }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        analyses[i].finalText = finalText;
+        document.getElementById(`hint-${i}`).style.display = 'inline';
+        showToast(`${a.studentName} 評語已儲存`);
+      } else {
+        showToast('儲存失敗');
+      }
+    } catch (e) {
+      showToast('儲存失敗：' + e.message);
+    }
+  }
+
+  async function sendAll() {
+    if (!confirm('確定要發送所有評語給家長嗎？')) return;
+    document.getElementById('sendAllBtn').disabled = true;
+    document.getElementById('sendAllBtn').textContent = '發送中…';
+
+    try {
+      const [startDate, endDate] = currentPeriod.split('~');
+      const res = await fetch('/api/ai-weekly-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startDate, endDate }),
+      });
+      const data = await res.json();
+      showToast(data.message || '發送完成');
+      setTimeout(loadAnalyses, 1000);
+    } catch (e) {
+      showToast('發送失敗：' + e.message);
+      document.getElementById('sendAllBtn').disabled = false;
+      document.getElementById('sendAllBtn').textContent = '發送全部給家長';
+    }
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    setTimeout(() => t.style.display = 'none', 2500);
+  }
+</script>
+</body>
+</html>

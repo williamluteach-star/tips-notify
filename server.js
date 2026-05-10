@@ -380,27 +380,74 @@ app.post('/api/class-weekly-summary', async (req, res) => {
   }
 });
 
-// API: 發送 AI 個人學習分析（週日 11:59，分析整週 Mon-Sat）
-app.post('/api/ai-weekly-analysis', async (req, res) => {
+// API: 【週六 6:01】產生 AI 個人分析並存到 Sheets（供老師審核）
+app.post('/api/ai-generate-analyses', async (req, res) => {
   try {
     const moment = require('moment');
     const now = moment().utcOffset('+08:00');
-
     let startDate, endDate;
     if (req.body.startDate && req.body.endDate) {
       startDate = req.body.startDate;
       endDate   = req.body.endDate;
     } else {
-      // 週日：分析本週一～六
+      startDate = now.clone().day(1).format('YYYY-MM-DD'); // 週一
+      endDate   = now.clone().day(6).format('YYYY-MM-DD'); // 週六
+    }
+    console.log(`[ai-generate] 產生 ${startDate} ~ ${endDate} 的 AI 分析`);
+    const result = await notificationService.generateAndSaveAIAnalyses(startDate, endDate);
+    res.json(result);
+  } catch (e) {
+    console.error('[ai-generate] 錯誤:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// API: 取得指定週期的 AI 評語（供審核介面使用）
+app.get('/api/ai-analyses', async (req, res) => {
+  try {
+    const moment = require('moment');
+    const now = moment().utcOffset('+08:00');
+    const startDate = req.query.startDate || now.clone().day(1).format('YYYY-MM-DD');
+    const endDate   = req.query.endDate   || now.clone().day(6).format('YYYY-MM-DD');
+    const period = `${startDate}~${endDate}`;
+    const analyses = await homeworkService.getAIAnalyses(period);
+    res.json({ success: true, period, analyses });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// API: 更新某學生的最終評語（老師修改）
+app.put('/api/ai-analyses/:studentName', async (req, res) => {
+  try {
+    const { studentName } = req.params;
+    const { period, finalText } = req.body;
+    if (!period || !finalText) return res.status(400).json({ error: '缺少 period 或 finalText' });
+    const result = await homeworkService.updateAIAnalysisFinal(period, studentName, finalText);
+    res.json({ success: !!result, result });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// API: 【週日 11:59】發送已審核的 AI 評語給家長
+app.post('/api/ai-weekly-analysis', async (req, res) => {
+  try {
+    const moment = require('moment');
+    const now = moment().utcOffset('+08:00');
+    let startDate, endDate;
+    if (req.body.startDate && req.body.endDate) {
+      startDate = req.body.startDate;
+      endDate   = req.body.endDate;
+    } else {
       startDate = now.clone().day(1).format('YYYY-MM-DD');
       endDate   = now.clone().day(6).format('YYYY-MM-DD');
     }
-
-    console.log(`[ai-weekly-analysis] 發送 ${startDate} ~ ${endDate} 的 AI 個人分析`);
+    console.log(`[ai-send] 發送 ${startDate} ~ ${endDate} 的 AI 評語`);
     const result = await notificationService.sendAIWeeklyAnalysis(startDate, endDate);
     res.json(result);
   } catch (e) {
-    console.error('[ai-weekly-analysis] 錯誤:', e.message);
+    console.error('[ai-send] 錯誤:', e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });

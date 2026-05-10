@@ -331,20 +331,17 @@ class NotificationService {
   }
 
   /**
-   * 發送 AI 個人學習分析（每週日 11:59，分析整週 Mon-Sat）
-   * 發給每位學生自己的家長
+   * 【週六 6:01】產生 AI 個人分析並存到 Google Sheets「AI評語待審」
+   * 老師可在週日前審核/修改，確認後週日 11:59 發送
    */
-  async sendAIWeeklyAnalysis(startDate, endDate) {
-    if (!client) {
-      return { success: false, message: 'LINE Bot 未設定（預覽模式）' };
-    }
-
+  async generateAndSaveAIAnalyses(startDate, endDate) {
     try {
       const records = await homeworkService.getHomeworkByDateRange(startDate, endDate);
+      const period = `${startDate}~${endDate}`;
 
       if (records.length === 0) {
-        console.log(`[AI分析] ${startDate} ~ ${endDate} 無學習記錄`);
-        return { success: true, message: '此區間無學習記錄', sent: 0 };
+        console.log(`[AI產生] ${period} 無學習記錄`);
+        return { success: true, message: '此區間無學習記錄', generated: 0 };
       }
 
       // 依學生分組
@@ -354,11 +351,58 @@ class NotificationService {
         grouped[r.學生姓名].push(r);
       });
 
+      const results = [];
+      for (const [studentName, weekRecords] of Object.entries(grouped)) {
+        const aiText = await aiService.analyzeStudentProgress(studentName, weekRecords);
+        if (!aiText) {
+          console.warn(`[AI產生] ${studentName} AI 分析失敗`);
+          results.push({ studentName, success: false });
+          continue;
+        }
+        await homeworkService.saveAIAnalysis({ period, studentName, aiText });
+        console.log(`[AI產生] ✅ ${studentName} 已儲存`);
+        results.push({ studentName, success: true });
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      return {
+        success: true,
+        message: `已產生 ${successCount}/${results.length} 位學生的 AI 分析`,
+        period,
+        results,
+      };
+    } catch (error) {
+      console.error('[AI產生] 錯誤:', error);
+      throw new Error(`產生 AI 分析失敗: ${error.message}`);
+    }
+  }
+
+  /**
+   * 【週日 11:59】從 Sheets 讀取已審核評語並發送給家長
+   */
+  async sendAIWeeklyAnalysis(startDate, endDate) {
+    if (!client) {
+      return { success: false, message: 'LINE Bot 未設定（預覽模式）' };
+    }
+
+    try {
+      const period = `${startDate}~${endDate}`;
+      const analyses = await homeworkService.getAIAnalyses(period);
+
+      if (analyses.length === 0) {
+        console.log(`[AI發送] ${period} 無待審 AI 評語`);
+        return { success: true, message: '無待發送的 AI 評語', sent: 0 };
+      }
+
       const startFmt = moment(startDate).format('MM/DD');
       const endFmt   = moment(endDate).format('MM/DD');
       const results  = [];
 
-      for (const [studentName, weekRecords] of Object.entries(grouped)) {
+      for (const analysis of analyses) {
+        if (analysis.status === '已發送') continue;
+
+        const { studentName, finalText } = analysis;
+
         let lineUserIds = this.getParentLineUserIds(studentName);
         if (lineUserIds.length === 0) {
           const fallbackStr = await homeworkService.getParentLineUserId(studentName);
@@ -371,37 +415,32 @@ class NotificationService {
           continue;
         }
 
-        // 呼叫 AI 分析
-        const aiComment = await aiService.analyzeStudentProgress(studentName, weekRecords);
-        if (!aiComment) {
-          console.warn(`[AI分析] ${studentName} AI 分析失敗，略過`);
-          results.push({ studentName, success: false, message: 'AI 分析失敗' });
-          continue;
-        }
-
-        const msg = `🤖【${startFmt}～${endFmt} AI 老師本週觀察】\n\n${studentName}\n\n${aiComment}\n\n感謝您的關注 🙏`;
+        const msg = `🤖【${startFmt}～${endFmt} AI 老師本週觀察】\n\n${studentName}\n\n${finalText}\n\n感謝您的關注 🙏`;
 
         for (const uid of lineUserIds) {
           try {
             await client.pushMessage(uid, { type: 'text', text: msg });
-            console.log(`[AI分析] ✅ 已發送給 ${studentName} 的家長（${uid}）`);
+            console.log(`[AI發送] ✅ 已發送給 ${studentName} 的家長（${uid}）`);
             results.push({ studentName, userId: uid, success: true });
           } catch (e) {
-            console.error(`[AI分析] ❌ 發送失敗 ${uid}:`, e.message);
+            console.error(`[AI發送] ❌ 發送失敗 ${uid}:`, e.message);
             results.push({ studentName, userId: uid, success: false, error: e.message });
           }
         }
       }
 
+      // 標記全部已發送
+      await homeworkService.markAIAnalysesSent(period);
+
       const successCount = results.filter(r => r.success).length;
       return {
         success: true,
         message: `AI 分析發送完成：${successCount}/${results.length} 位家長`,
-        period: `${startDate} ~ ${endDate}`,
+        period,
         results,
       };
     } catch (error) {
-      console.error('[AI分析] 錯誤:', error);
+      console.error('[AI發送] 錯誤:', error);
       throw new Error(`發送 AI 分析失敗: ${error.message}`);
     }
   }
