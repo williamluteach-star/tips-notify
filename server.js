@@ -382,18 +382,32 @@ app.post('/api/class-weekly-summary', async (req, res) => {
 
 // API: 測試 Anthropic API 連線（診斷用）
 app.get('/api/ai-test', async (req, res) => {
+  // 診斷：列出所有含 ANTHROPIC 或 API 的 env key 名稱（不含值）
+  const allKeys = Object.keys(process.env);
+  const anthropicKeys = allKeys.filter(k => k.toUpperCase().includes('ANTHROPIC'));
+  const keyValue = process.env.ANTHROPIC_API_KEY;
+  const keyInfo = keyValue
+    ? { present: true, length: keyValue.length, prefix: keyValue.substring(0, 15), hasQuotes: keyValue.startsWith('"') || keyValue.startsWith("'") }
+    : { present: false };
+
   try {
     const Anthropic = require('@anthropic-ai/sdk');
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.json({ success: false, error: 'ANTHROPIC_API_KEY 未設定' });
+    if (!keyValue) {
+      return res.json({
+        success: false,
+        error: 'ANTHROPIC_API_KEY 未設定',
+        keyInfo,
+        anthropicRelatedKeys: anthropicKeys,
+        totalEnvKeys: allKeys.length,
+      });
     }
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = new Anthropic({ apiKey: keyValue });
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 50,
       messages: [{ role: 'user', content: 'Say "OK" in one word.' }],
     });
-    res.json({ success: true, reply: response.content[0]?.text });
+    res.json({ success: true, reply: response.content[0]?.text, keyInfo });
   } catch (error) {
     const status = error.status || error.statusCode || 'unknown';
     res.json({
@@ -401,6 +415,8 @@ app.get('/api/ai-test', async (req, res) => {
       status,
       message: error.message,
       apiError: error.error || null,
+      keyInfo,
+      anthropicRelatedKeys: anthropicKeys,
     });
   }
 });
