@@ -1,8 +1,3 @@
-// 直接設定 ANTHROPIC_API_KEY（Railway 無法正確注入此變數）
-if (!process.env.ANTHROPIC_API_KEY) {
-  process.env.ANTHROPIC_API_KEY = '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';
-}
-
 const express = require('express');
 const line = require('@line/bot-sdk');
 const driveService = require('./services/driveService');
