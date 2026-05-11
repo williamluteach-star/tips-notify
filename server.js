@@ -386,9 +386,9 @@ app.get('/api/ai-test', async (req, res) => {
   // 診斷：列出所有 env key 名稱（不含值）
   const allKeys = Object.keys(process.env).sort();
   const anthropicKeys = allKeys.filter(k => k.toUpperCase().includes('ANTHROPIC'));
-  const keyValue = process.env.ANTHROPIC_API_KEY;
+  const keyValue = process.env.ANTHROPIC_API_KEY || process.env.ANT_API_KEY;
   const keyInfo = keyValue
-    ? { present: true, length: keyValue.length, prefix: keyValue.substring(0, 15), hasQuotes: keyValue.startsWith('"') || keyValue.startsWith("'") }
+    ? { present: true, length: keyValue.length, prefix: keyValue.substring(0, 15), hasQuotes: keyValue.startsWith('"') || keyValue.startsWith("'"), source: process.env.ANTHROPIC_API_KEY ? 'ANTHROPIC_API_KEY' : 'ANT_API_KEY' }
     : { present: false };
 
   try {
