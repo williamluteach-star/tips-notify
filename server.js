@@ -1,6 +1,6 @@
 // 直接設定 ANTHROPIC_API_KEY（Railway 無法正確注入此變數）
 if (!process.env.ANTHROPIC_API_KEY) {
-  process.env.ANTHROPIC_API_KEY = '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';
+  process.env.ANTHROPIC_API_KEY = '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';
 }
 
 const express = require('express');
