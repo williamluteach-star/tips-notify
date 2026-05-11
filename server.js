@@ -382,8 +382,8 @@ app.post('/api/class-weekly-summary', async (req, res) => {
 
 // API: 測試 Anthropic API 連線（診斷用）
 app.get('/api/ai-test', async (req, res) => {
-  // 診斷：列出所有含 ANTHROPIC 或 API 的 env key 名稱（不含值）
-  const allKeys = Object.keys(process.env);
+  // 診斷：列出所有 env key 名稱（不含值）
+  const allKeys = Object.keys(process.env).sort();
   const anthropicKeys = allKeys.filter(k => k.toUpperCase().includes('ANTHROPIC'));
   const keyValue = process.env.ANTHROPIC_API_KEY;
   const keyInfo = keyValue
@@ -399,6 +399,7 @@ app.get('/api/ai-test', async (req, res) => {
         keyInfo,
         anthropicRelatedKeys: anthropicKeys,
         totalEnvKeys: allKeys.length,
+        allEnvKeys: allKeys,
       });
     }
     const client = new Anthropic({ apiKey: keyValue });
