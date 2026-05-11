@@ -380,6 +380,31 @@ app.post('/api/class-weekly-summary', async (req, res) => {
   }
 });
 
+// API: 測試 Anthropic API 連線（診斷用）
+app.get('/api/ai-test', async (req, res) => {
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.json({ success: false, error: 'ANTHROPIC_API_KEY 未設定' });
+    }
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 50,
+      messages: [{ role: 'user', content: 'Say "OK" in one word.' }],
+    });
+    res.json({ success: true, reply: response.content[0]?.text });
+  } catch (error) {
+    const status = error.status || error.statusCode || 'unknown';
+    res.json({
+      success: false,
+      status,
+      message: error.message,
+      apiError: error.error || null,
+    });
+  }
+});
+
 // API: 【週六 6:01】產生 AI 個人分析並存到 Sheets（供老師審核）
 app.post('/api/ai-generate-analyses', async (req, res) => {
   try {

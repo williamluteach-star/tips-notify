@@ -66,7 +66,9 @@ ${recordSummary || '  本週無任何記錄'}`;
       });
       return response.content[0]?.text?.trim() || null;
     } catch (error) {
-      console.error('[AI] 分析學生進度失敗:', error.message);
+      const status = error.status || error.statusCode || (error.response?.status) || 'unknown';
+      console.error(`[AI] 分析學生進度失敗 (HTTP ${status}):`, error.message);
+      if (error.error) console.error('[AI] API 錯誤詳細:', JSON.stringify(error.error));
       return null;
     }
   }
