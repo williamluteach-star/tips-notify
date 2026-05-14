@@ -872,6 +872,81 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// ── GET 觸發端點（供排程任務使用，繞過 proxy 限制）──────────────────────
+// 週摘要：週四送週一~三，週六送週四~六
+app.get('/api/trigger/weekly-summary', async (req, res) => {
+  try {
+    const moment = require('moment');
+    const now = moment().utcOffset('+08:00');
+    const dow = now.day();
+    let startDate, endDate;
+    if (dow === 4) {
+      startDate = now.clone().day(1).format('YYYY-MM-DD');
+      endDate   = now.clone().day(3).format('YYYY-MM-DD');
+    } else if (dow === 6) {
+      startDate = now.clone().day(4).format('YYYY-MM-DD');
+      endDate   = now.clone().day(6).format('YYYY-MM-DD');
+    } else {
+      return res.status(400).json({ error: `今天是週${['日','一','二','三','四','五','六'][dow]}，不在發送日（週四/週六）` });
+    }
+    console.log(`[trigger/weekly-summary] 發送 ${startDate} ~ ${endDate}`);
+    const result = await notificationService.sendWeeklySummary(startDate, endDate);
+    res.json(result);
+  } catch (e) {
+    console.error('[trigger/weekly-summary]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// 班級週報：每週日送本週一~六
+app.get('/api/trigger/class-weekly-summary', async (req, res) => {
+  try {
+    const moment = require('moment');
+    const now = moment().utcOffset('+08:00');
+    const startDate = now.clone().day(1).format('YYYY-MM-DD');
+    const endDate   = now.clone().day(6).format('YYYY-MM-DD');
+    console.log(`[trigger/class-weekly-summary] 發送 ${startDate} ~ ${endDate}`);
+    const result = await notificationService.sendClassWeeklySummary(startDate, endDate);
+    res.json(result);
+  } catch (e) {
+    console.error('[trigger/class-weekly-summary]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// AI 分析產生：每週六產生本週一~六分析
+app.get('/api/trigger/ai-generate-analyses', async (req, res) => {
+  try {
+    const moment = require('moment');
+    const now = moment().utcOffset('+08:00');
+    const startDate = now.clone().day(1).format('YYYY-MM-DD');
+    const endDate   = now.clone().day(6).format('YYYY-MM-DD');
+    console.log(`[trigger/ai-generate-analyses] 產生 ${startDate} ~ ${endDate}`);
+    const result = await notificationService.generateAndSaveAIAnalyses(startDate, endDate);
+    res.json(result);
+  } catch (e) {
+    console.error('[trigger/ai-generate-analyses]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// AI 週報發送：每週日發送本週一~六 AI 評語
+app.get('/api/trigger/ai-weekly-analysis', async (req, res) => {
+  try {
+    const moment = require('moment');
+    const now = moment().utcOffset('+08:00');
+    const startDate = now.clone().day(1).format('YYYY-MM-DD');
+    const endDate   = now.clone().day(6).format('YYYY-MM-DD');
+    console.log(`[trigger/ai-weekly-analysis] 發送 ${startDate} ~ ${endDate}`);
+    const result = await notificationService.sendAIWeeklyAnalysis(startDate, endDate);
+    res.json(result);
+  } catch (e) {
+    console.error('[trigger/ai-weekly-analysis]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 // LINE 診斷 API：檢查 Token 有效性 + 每月配額
 app.get('/api/debug/line-status', async (req, res) => {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
@@ -905,6 +980,42 @@ app.get('/api/debug/line-status', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// ── Server-side 排程（node-cron，台灣時區，不需電腦開著）────────────────────
+const cron = require('node-cron');
+
+// 週四 10:00 → 發送週一~三作業週摘要
+cron.schedule('0 10 * * 4', async () => {
+  const moment = require('moment');
+  const now = moment().utcOffset('+08:00');
+  const startDate = now.clone().day(1).format('YYYY-MM-DD');
+  const endDate   = now.clone().day(3).format('YYYY-MM-DD');
+  console.log(`[cron/週四] 發送 ${startDate} ~ ${endDate} 作業週摘要`);
+  try {
+    const result = await notificationService.sendWeeklySummary(startDate, endDate);
+    console.log('[cron/週四] 完成：', JSON.stringify(result));
+  } catch (e) {
+    console.error('[cron/週四] 錯誤：', e.message);
+  }
+}, { timezone: 'Asia/Taipei' });
+
+// 週六 18:08 → 發送週四~六作業週摘要
+cron.schedule('8 18 * * 6', async () => {
+  const moment = require('moment');
+  const now = moment().utcOffset('+08:00');
+  const startDate = now.clone().day(4).format('YYYY-MM-DD');
+  const endDate   = now.clone().day(6).format('YYYY-MM-DD');
+  console.log(`[cron/週六] 發送 ${startDate} ~ ${endDate} 作業週摘要`);
+  try {
+    const result = await notificationService.sendWeeklySummary(startDate, endDate);
+    console.log('[cron/週六] 完成：', JSON.stringify(result));
+  } catch (e) {
+    console.error('[cron/週六] 錯誤：', e.message);
+  }
+}, { timezone: 'Asia/Taipei' });
+
+console.log('✅ 排程已啟動：週四10:00、週六18:08（台灣時區）');
+// ─────────────────────────────────────────────────────────────────────────────
 
 // 啟動伺服器
 const PORT = process.env.PORT || 3000;
