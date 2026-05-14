@@ -981,40 +981,53 @@ app.get('/api/debug/line-status', async (req, res) => {
   }
 });
 
-// ── Server-side 排程（node-cron，台灣時區，不需電腦開著）────────────────────
-const cron = require('node-cron');
+// ── Server-side 排程（純 JS，不需外部套件，台灣時區）──────────────────────
+// 取得台灣當下時間（moment 已安裝）
+function getTaipeiNow() {
+  return require('moment')().utcOffset('+08:00');
+}
 
-// 週四 10:00 → 發送週一~三作業週摘要
-cron.schedule('0 10 * * 4', async () => {
-  const moment = require('moment');
-  const now = moment().utcOffset('+08:00');
-  const startDate = now.clone().day(1).format('YYYY-MM-DD');
-  const endDate   = now.clone().day(3).format('YYYY-MM-DD');
-  console.log(`[cron/週四] 發送 ${startDate} ~ ${endDate} 作業週摘要`);
-  try {
-    const result = await notificationService.sendWeeklySummary(startDate, endDate);
-    console.log('[cron/週四] 完成：', JSON.stringify(result));
-  } catch (e) {
-    console.error('[cron/週四] 錯誤：', e.message);
+// 防止同一分鐘重複發送的記錄
+const _cronFired = {};
+
+// 每分鐘檢查是否到了預定發送時間
+setInterval(async () => {
+  const now = getTaipeiNow();
+  const dow  = now.day();   // 0=日,1=一,...,6=六
+  const h    = now.hours();
+  const m    = now.minutes();
+  const key  = `${now.format('YYYY-MM-DD')}-${h}-${m}`;
+
+  // 週四 10:00 → 發送週一~三作業週摘要
+  if (dow === 4 && h === 10 && m === 0 && !_cronFired[key + '-thu']) {
+    _cronFired[key + '-thu'] = true;
+    const startDate = now.clone().day(1).format('YYYY-MM-DD');
+    const endDate   = now.clone().day(3).format('YYYY-MM-DD');
+    console.log(`[排程/週四10:00] 發送 ${startDate} ~ ${endDate} 作業週摘要`);
+    try {
+      const result = await notificationService.sendWeeklySummary(startDate, endDate);
+      console.log('[排程/週四] 完成：', JSON.stringify(result));
+    } catch (e) {
+      console.error('[排程/週四] 錯誤：', e.message);
+    }
   }
-}, { timezone: 'Asia/Taipei' });
 
-// 週六 18:08 → 發送週四~六作業週摘要
-cron.schedule('8 18 * * 6', async () => {
-  const moment = require('moment');
-  const now = moment().utcOffset('+08:00');
-  const startDate = now.clone().day(4).format('YYYY-MM-DD');
-  const endDate   = now.clone().day(6).format('YYYY-MM-DD');
-  console.log(`[cron/週六] 發送 ${startDate} ~ ${endDate} 作業週摘要`);
-  try {
-    const result = await notificationService.sendWeeklySummary(startDate, endDate);
-    console.log('[cron/週六] 完成：', JSON.stringify(result));
-  } catch (e) {
-    console.error('[cron/週六] 錯誤：', e.message);
+  // 週六 18:08 → 發送週四~六作業週摘要
+  if (dow === 6 && h === 18 && m === 8 && !_cronFired[key + '-sat']) {
+    _cronFired[key + '-sat'] = true;
+    const startDate = now.clone().day(4).format('YYYY-MM-DD');
+    const endDate   = now.clone().day(6).format('YYYY-MM-DD');
+    console.log(`[排程/週六18:08] 發送 ${startDate} ~ ${endDate} 作業週摘要`);
+    try {
+      const result = await notificationService.sendWeeklySummary(startDate, endDate);
+      console.log('[排程/週六] 完成：', JSON.stringify(result));
+    } catch (e) {
+      console.error('[排程/週六] 錯誤：', e.message);
+    }
   }
-}, { timezone: 'Asia/Taipei' });
+}, 60 * 1000); // 每分鐘檢查
 
-console.log('✅ 排程已啟動：週四10:00、週六18:08（台灣時區）');
+console.log('✅ 排程已啟動：週四10:00、週六18:08（台灣時區，server-side）');
 // ─────────────────────────────────────────────────────────────────────────────
 
 // 啟動伺服器
