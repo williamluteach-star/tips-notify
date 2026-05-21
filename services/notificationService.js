@@ -20,7 +20,16 @@ const homeworkService = require('./homeworkService');
 const aiService = require('./aiService');
 
 // ─────────────────────────────────────────────
-// 班級週報：勵志語資料庫（中英文配對算一句）
+// 週四/週六 個人週報勵志語（3 句隨機選 1）
+// ─────────────────────────────────────────────
+const WEEKLY_SUMMARY_ENCOURAGEMENTS = [
+  `🐾 "Every small step you take brings you closer to your goal. Keep going!" 🚀\n（你邁出的每一個小步伐，都讓你離目標更近。繼續前進吧！）`,
+  `🌟 "Believe in yourself and all that you are. You are stronger than you think." 💪\n（相信自己以及你所擁有的一切。你比你想像的還要強大。）`,
+  `🌱 "Kids' hard work will pay off. Stay positive and keep shining!" ✨\n（孩子的努力會有回報的。保持正面，繼續閃耀！）`,
+];
+
+// ─────────────────────────────────────────────
+// 週日 11:58 個人 AI 評語勵志語（6 句隨機選 1）
 // ─────────────────────────────────────────────
 const STUDENT_ENCOURAGEMENTS = [
   // 穩定進步型
@@ -34,6 +43,9 @@ const STUDENT_ENCOURAGEMENTS = [
   `當你掌握了學習的邏輯，世界就沒有什麼能難倒你的知識。🌍\nOnce you master the logic of learning, no knowledge in the world can stand in your way. 💡`,
 ];
 
+// ─────────────────────────────────────────────
+// 週日 11:59 年級週報家長勵志語（2 句隨機選 1，搭配 ATOMIC_POWER 一起送）
+// ─────────────────────────────────────────────
 const PARENT_ENCOURAGEMENTS = [
   `每一次的現場投入，都是在為孩子的學習信心存入一筆資產。💎\nEvery moment of on-site engagement is a direct investment into your child's learning confidence. 🏦`,
   `讓孩子看見堅持的力量，就是我們能給他最好的科學教育。🤝\nShowing children the power of persistence is the finest scientific education we can provide. 🧬`,
@@ -231,8 +243,7 @@ class NotificationService {
           });
         }
         msg += `✅ 共完成 ${hwItems.length} 項進度\n\n`;
-        msg += `${randomFrom(STUDENT_ENCOURAGEMENTS)}\n\n`;
-        msg += `${randomFrom(PARENT_ENCOURAGEMENTS)}\n\n`;
+        msg += `${randomFrom(WEEKLY_SUMMARY_ENCOURAGEMENTS)}\n\n`;
         msg += `感謝您的關注 🙏`;
 
         for (const uid of lineUserIds) {
@@ -420,9 +431,11 @@ class NotificationService {
           continue;
         }
 
+        const gradeMsg = `${finalText}\n\n${randomFrom(PARENT_ENCOURAGEMENTS)}\n\n${ATOMIC_POWER}`;
+
         for (const uid of allLineIds) {
           try {
-            await client.pushMessage(uid, { type: 'text', text: finalText });
+            await client.pushMessage(uid, { type: 'text', text: gradeMsg });
             allResults.push({ grade, userId: uid, success: true });
           } catch (e) {
             allResults.push({ grade, userId: uid, success: false, error: e.message });
@@ -662,7 +675,7 @@ class NotificationService {
 
         // 只顯示名（去掉姓），保留英文名，看起來更親切
         const displayName = extractGivenName(studentName);
-        const msg = `🤖【${startFmt}～${endFmt} AI 老師本週觀察】\n\n${displayName}\n\n${finalText}\n\n${randomFrom(STUDENT_ENCOURAGEMENTS)}\n\n${randomFrom(PARENT_ENCOURAGEMENTS)}\n\n感謝您的關注 🙏`;
+        const msg = `🤖【${startFmt}～${endFmt} AI 老師本週觀察】\n\n${displayName}\n\n${finalText}\n\n${randomFrom(STUDENT_ENCOURAGEMENTS)}\n\n感謝您的關注 🙏`;
 
         for (const uid of lineUserIds) {
           try {
