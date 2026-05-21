@@ -141,8 +141,8 @@ class NotificationService {
       }
 
       const timeFormatted = completedTime
-        ? moment(completedTime).format('YYYY年MM月DD日 HH:mm')
-        : moment().format('YYYY年MM月DD日 HH:mm');
+        ? moment(completedTime).utcOffset('+08:00').format('YYYY年MM月DD日 HH:mm')
+        : moment().utcOffset('+08:00').format('YYYY年MM月DD日 HH:mm');
 
       let messageText = `🎉 學習進度通知 🎉\n\n${studentName} 已完成以下進度：\n\n📚 ${homeworkItem}\n\n⏰ 完成時間：${timeFormatted}`;
       if (photoUrl) {
@@ -692,7 +692,7 @@ class NotificationService {
    */
   async sendDailySummary(date) {
     try {
-      const targetDate = date || moment().format('YYYY-MM-DD');
+      const targetDate = date || moment().utcOffset('+08:00').format('YYYY-MM-DD');
       const records = await homeworkService.getHomeworkByDate(targetDate);
       if (records.length === 0) {
         return { success: true, message: '當日無學習記錄' };

@@ -49,10 +49,10 @@ class HomeworkService {
       throw new Error('GOOGLE_SHEETS_NOT_CONFIGURED');
     }
 
-    const timestamp = moment().format('YYYY-MM-DD HH:mm:ss');
+    const timestamp = moment().utcOffset('+08:00').format('YYYY-MM-DD HH:mm:ss');
     const completedTimeFormatted = completedTime
-      ? moment(completedTime).format('YYYY-MM-DD HH:mm')
-      : moment().format('YYYY-MM-DD HH:mm');
+      ? moment(completedTime).utcOffset('+08:00').format('YYYY-MM-DD HH:mm')
+      : moment().utcOffset('+08:00').format('YYYY-MM-DD HH:mm');
 
     const values = [[timestamp, studentName, homeworkItem, completedTimeFormatted, operator, '待通知', '', photoUrl]];
 
@@ -176,7 +176,7 @@ class HomeworkService {
         range: '作業記錄表!A2:G',
       });
 
-      const cutoffDate = moment().subtract(days, 'days');
+      const cutoffDate = moment().utcOffset('+08:00').subtract(days, 'days');
       const records = (homeworkResponse.data.values || [])
         .filter(row => {
           if (row[1] !== studentName) return false;

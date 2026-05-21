@@ -134,8 +134,7 @@ ${recordSummary || '  本週無任何記錄'}
    */
   _formatCostInfo(inputTokens, outputTokens) {
     const usd = this._calcCost(inputTokens, outputTokens);
-    const twd = usd * 32.5; // 約略匯率，僅供參考
-    return `輸入 ${inputTokens} / 輸出 ${outputTokens} tokens | $${usd.toFixed(6)} USD (≈ NT$${twd.toFixed(3)})`;
+    return `輸入 ${inputTokens} / 輸出 ${outputTokens} tokens | $${usd.toFixed(6)} USD`;
   }
 
   /**
