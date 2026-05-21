@@ -634,12 +634,47 @@ class HomeworkService {
     }
   }
   /**
+   * 確保工作表存在，不存在則自動建立（含表頭）
+   */
+  async _ensureSheet(sheetTitle, headers) {
+    if (!this.sheets) return;
+    try {
+      // 嘗試讀取看是否存在
+      await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${sheetTitle}!A1`,
+      });
+    } catch (e) {
+      if (e.message?.includes('Unable to parse range') || e.message?.includes('not found') || e.code === 400) {
+        // 工作表不存在，建立它
+        try {
+          await this.sheets.spreadsheets.batchUpdate({
+            spreadsheetId: this.spreadsheetId,
+            requestBody: { requests: [{ addSheet: { properties: { title: sheetTitle } } }] },
+          });
+          // 寫入表頭
+          await this.sheets.spreadsheets.values.update({
+            spreadsheetId: this.spreadsheetId,
+            range: `${sheetTitle}!A1:${String.fromCharCode(64 + headers.length)}1`,
+            valueInputOption: 'USER_ENTERED',
+            resource: { values: [headers] },
+          });
+          console.log(`[GSheets] 已自動建立工作表：${sheetTitle}`);
+        } catch (createErr) {
+          console.warn(`[GSheets] 建立工作表失敗 ${sheetTitle}:`, createErr.message);
+        }
+      }
+    }
+  }
+
+  /**
    * 儲存 AI 評語到「AI評語待審」工作表
    * 欄位：A=週期, B=學生姓名, C=AI原始評語, D=最終評語, E=狀態, F=產生時間
    */
   async saveAIAnalysis({ period, studentName, aiText }) {
     if (!this.sheets) await this.init();
     if (!this.sheets) return null;
+    await this._ensureSheet('AI評語待審', ['週期', '學生姓名', 'AI原始評語', '最終評語', '狀態', '產生時間']);
 
     const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
     try {
@@ -690,6 +725,7 @@ class HomeworkService {
   async saveGradeReport({ period, grade, msgText }) {
     if (!this.sheets) await this.init();
     if (!this.sheets) return null;
+    await this._ensureSheet('年級週報待審', ['週期', '年級', '報告文字', '最終文字', '狀態', '產生時間']);
 
     const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
     try {
