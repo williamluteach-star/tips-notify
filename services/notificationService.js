@@ -212,13 +212,28 @@ class NotificationService {
         }
 
         // 本期進度列表
+        const givenName = extractGivenName(studentName);
+        const hwItems   = items.filter(r => !parseLeaveType(r.作業項目));
+        const leaveItems = items.filter(r => parseLeaveType(r.作業項目));
+
         let msg = `📋【${startFmt}～${endFmt} 學習進度週報】\n\n`;
-        msg += `${studentName} 本期完成：\n\n`;
-        items.forEach((r, i) => {
+        msg += `${givenName} 本期完成：\n\n`;
+        hwItems.forEach((r, i) => {
           const dateStr = moment(r.時間戳記, ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss']).format('MM/DD');
           msg += `${i + 1}. ${r.作業項目}\n   📅 ${dateStr}\n\n`;
         });
-        msg += `✅ 共完成 ${items.length} 項進度\n\n感謝您的關注 🙏`;
+        if (leaveItems.length > 0) {
+          leaveItems.forEach(r => {
+            const dateStr = moment(r.時間戳記, ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss']).format('MM/DD');
+            const lt = parseLeaveType(r.作業項目);
+            const icon = lt === '病假' ? '🏥' : lt === '事假' ? '📋' : lt === '公假' ? '📌' : '🕊️';
+            msg += `${icon} ${lt}　📅 ${dateStr}\n\n`;
+          });
+        }
+        msg += `✅ 共完成 ${hwItems.length} 項進度\n\n`;
+        msg += `${randomFrom(STUDENT_ENCOURAGEMENTS)}\n\n`;
+        msg += `${randomFrom(PARENT_ENCOURAGEMENTS)}\n\n`;
+        msg += `感謝您的關注 🙏`;
 
         for (const uid of lineUserIds) {
           try {
