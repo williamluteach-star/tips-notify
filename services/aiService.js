@@ -1,12 +1,33 @@
 const Anthropic = require('@anthropic-ai/sdk');
+const { google } = require('googleapis');
 const moment = require('moment');
 
 class AIService {
   constructor() {
     this.client = null;
-    if (process.env.ANTHROPIC_API_KEY) {
+    // Kick off async init; store the promise so analyzeStudentProgress can await it
+    this._initPromise = this._initClient();
+  }
+
+  /**
+   * Try to find the Anthropic API key:
+   *   1. process.env.ANTHROPIC_API_KEY  (normal case)
+   *   2. Google Sheets Config!B1        (Railway Runtime-V2 snapshot workaround)
+   */
+  async _initClient() {
+    let apiKey = process.env.ANTHROPIC_API_KEY;
+
+    if (!apiKey) {
       try {
-        this.client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+        apiKey = await this._getKeyFromSheets();
+      } catch (e) {
+        console.warn('[AI] 無法從 Google Sheets 讀取 API key:', e.message);
+      }
+    }
+
+    if (apiKey) {
+      try {
+        this.client = new Anthropic({ apiKey });
         console.log('[AI] Claude API 初始化成功');
       } catch (e) {
         console.warn('[AI] Anthropic SDK 初始化失敗:', e.message);
@@ -17,12 +38,51 @@ class AIService {
   }
 
   /**
+   * Read ANTHROPIC_API_KEY from Google Sheets "Config" tab, cell B1.
+   * Falls back silently if Google credentials are not configured.
+   */
+  async _getKeyFromSheets() {
+    if (
+      !process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+      !process.env.GOOGLE_PRIVATE_KEY ||
+      !process.env.GOOGLE_SHEETS_ID
+    ) {
+      return null;
+    }
+
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      },
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    });
+
+    const authClient = await auth.getClient();
+    const sheets = google.sheets({ version: 'v4', auth: authClient });
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEETS_ID,
+      range: 'Config!B1',
+    });
+
+    const key = response.data.values?.[0]?.[0]?.trim();
+    if (key && key.startsWith('sk-ant-')) {
+      console.log('[AI] 從 Google Sheets Config 讀取 API key 成功');
+      return key;
+    }
+    return null;
+  }
+
+  /**
    * 分析單一學生的完整週學習習慣，產出個人化評語與建議
    * @param {string} studentName - 學生姓名（含英文名）
    * @param {Array}  weekRecords - 完整週記錄（Mon-Sat）
    * @returns {string|null} AI 評語，或 null（若無 API key）
    */
   async analyzeStudentProgress(studentName, weekRecords) {
+    // Ensure async init is complete before proceeding
+    await this._initPromise;
     if (!this.client) return null;
 
     // 只取中文名（去除英文名）用於 prompt
