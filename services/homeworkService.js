@@ -903,56 +903,166 @@ class HomeworkService {
       return null;
     }
   }
-}
 
   /**
    * 讀取「成績記錄」工作表中指定學生的月考成績
-   * 欄位：A=學生姓名, B=年級, C=國文, D=英文, E=數學, F=自然, G=社會, H=其他備注
-   * 各科欄位填入逗號分隔的歷次分數，例如：85,82,88,91,78
-   * @returns {string} 供 AI prompt 使用的成績摘要，找不到資料回傳空字串
+   *
+   * 格式彈性：第一列為任意欄位標題（例如你原有的成績表），
+   * 第一欄為學生姓名，程式自動配對標題與數值，不強制固定欄位。
+   *
+   * @returns {string} 供 AI prompt 使用的成績文字，找不到資料回傳空字串
    */
   async getStudentScores(studentName) {
     if (!this.sheets) await this.init();
     if (!this.sheets) return '';
     try {
+      // 讀取含標題列的全部資料（A1 開始，最多 Z 欄）
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: '成績記錄!A2:H',
+        range: '成績記錄!A1:Z',
       });
       const rows = response.data.values || [];
-      const row = rows.find(r => r[0] === studentName);
-      if (!row) return '';
+      if (rows.length < 2) return '';
 
-      const subjects = [
-        { name: '國文', scores: row[2] },
-        { name: '英文', scores: row[3] },
-        { name: '數學', scores: row[4] },
-        { name: '自然', scores: row[5] },
-        { name: '社會', scores: row[6] },
-      ];
+      const headers = rows[0];
+      const dataRow = rows.slice(1).find(r => r[0] === studentName);
+      if (!dataRow) return '';
 
-      const lines = subjects
-        .filter(s => s.scores && s.scores.trim())
-        .map(s => {
-          const nums = s.scores.split(',').map(n => parseFloat(n.trim())).filter(n => !isNaN(n));
-          if (nums.length === 0) return null;
-          const avg = (nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(1);
-          const trend = nums.length >= 2
-            ? (nums[nums.length - 1] - nums[0] > 3 ? '↑上升' : nums[0] - nums[nums.length - 1] > 3 ? '↓下降' : '→平穩')
-            : '';
-          return `  ${s.name}：平均 ${avg} 分（${nums.length} 次）${trend ? ' ' + trend : ''}`;
+      // 把標題與數值配對（跳過第一欄學生姓名），有值才輸出
+      const pairs = headers
+        .map((h, i) => {
+          if (i === 0) return null; // 跳過姓名欄
+          const val = (dataRow[i] || '').trim();
+          if (!val) return null;
+          return `  ${h}：${val}`;
         })
         .filter(Boolean);
 
-      if (lines.length === 0) return '';
-      const note = row[7] ? `\n  備注：${row[7]}` : '';
-      return `學科月考成績摘要（歷次平均）：\n${lines.join('\n')}${note}`;
+      if (pairs.length === 0) return '';
+      return `【歷次月考成績記錄】\n${pairs.join('\n')}`;
     } catch (error) {
-      if (!error.message?.includes('Unable to parse range')) {
-        console.warn('[GSheets] 讀取成績記錄失敗:', error.message);
-      }
+      // 工作表不存在時靜默略過，不影響主流程
       return '';
     }
+  }
+
+  /**
+   * 【一次性】讀取「成績記錄」所有學生，讓雙 AI 進行初步認識，
+   * 並將結果寫回同一工作表的末尾三欄：AI原始評語1(甲) / AI原始評語2(乙) / Token費用
+   */
+  async analyzeAndSaveScoreIntros() {
+    if (!this.sheets) await this.init();
+    if (!this.sheets) throw new Error('GOOGLE_SHEETS_NOT_CONFIGURED');
+
+    const aiService = require('./aiService');
+
+    // 1. 讀取整張成績記錄表（A1:Z，含標題列）
+    const response = await this.sheets.spreadsheets.values.get({
+      spreadsheetId: this.spreadsheetId,
+      range: '成績記錄!A1:Z',
+    });
+    const rows = response.data.values || [];
+    if (rows.length < 2) return { success: false, message: '成績記錄工作表沒有資料' };
+
+    const headers = rows[0];
+    const dataRows = rows.slice(1).filter(r => r[0]); // 只處理有姓名的列
+
+    // 2. 找出目前最後一欄（成績欄）的位置
+    //    若 header 最後幾欄已是 AI 欄位，先移除，重新寫入
+    const AI_HEADERS = ['AI原始評語1(甲)', 'AI原始評語2(乙)', 'Token費用'];
+    let scoreColCount = headers.length;
+    // 移除尾端已有的 AI 欄位，避免重複疊加
+    while (scoreColCount > 0 && AI_HEADERS.includes(headers[scoreColCount - 1])) {
+      scoreColCount--;
+    }
+
+    // 3. 計算要寫入的欄位位置（1-based）：成績欄之後接 3 欄
+    const jiaColIdx  = scoreColCount;     // 0-based index
+    const yiColIdx   = scoreColCount + 1;
+    const costColIdx = scoreColCount + 2;
+
+    // 欄位字母轉換（支援 A-Z, AA-AZ...）
+    const colLetter = (idx) => {
+      let s = '';
+      idx++; // 轉成 1-based
+      while (idx > 0) {
+        idx--;
+        s = String.fromCharCode(65 + (idx % 26)) + s;
+        idx = Math.floor(idx / 26);
+      }
+      return s;
+    };
+
+    const jiaCol  = colLetter(jiaColIdx);
+    const yiCol   = colLetter(yiColIdx);
+    const costCol = colLetter(costColIdx);
+
+    // 4. 先寫入（或更新）表頭的 AI 三欄
+    const headerRow = 1;
+    await this.sheets.spreadsheets.values.update({
+      spreadsheetId: this.spreadsheetId,
+      range: `成績記錄!${jiaCol}${headerRow}:${costCol}${headerRow}`,
+      valueInputOption: 'USER_ENTERED',
+      resource: { values: [AI_HEADERS] },
+    });
+
+    // 5. 逐一分析每位學生並寫回
+    const results = [];
+    for (let i = 0; i < dataRows.length; i++) {
+      const dataRow = dataRows[i];
+      const studentName = dataRow[0];
+      const sheetRow = i + 2; // 1-based + 1 header
+
+      // 組成成績摘要
+      const pairs = headers.slice(0, scoreColCount)
+        .map((h, idx) => {
+          if (idx === 0) return null;
+          const val = (dataRow[idx] || '').trim();
+          return val ? `  ${h}：${val}` : null;
+        })
+        .filter(Boolean);
+
+      if (pairs.length === 0) {
+        console.log(`[成績分析] ${studentName} 無成績資料，跳過`);
+        results.push({ studentName, skipped: true });
+        continue;
+      }
+      const scoresSummary = `【歷次月考成績記錄】\n${pairs.join('\n')}`;
+
+      console.log(`[成績分析] 開始分析 ${studentName}...`);
+      const aiResult = await aiService.analyzeStudentFromScores(studentName, scoresSummary).catch(e => {
+        console.error(`[成績分析] ${studentName} AI 錯誤：${e.message}`);
+        return null;
+      });
+
+      if (!aiResult) {
+        results.push({ studentName, error: 'AI 分析失敗' });
+        continue;
+      }
+
+      const { jiaText, yiText, costInfo } = aiResult;
+
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `成績記錄!${jiaCol}${sheetRow}:${costCol}${sheetRow}`,
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: [[jiaText || '', yiText || '', costInfo || '']] },
+      });
+
+      console.log(`[成績分析] ${studentName} ✅ 寫入完成`);
+      results.push({ studentName, success: true, costInfo });
+
+      // 避免 API rate limit
+      await new Promise(r => setTimeout(r, 800));
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    return {
+      success: true,
+      message: `成績分析完成：${successCount}/${dataRows.length} 位學生`,
+      results,
+      columns: { jia: jiaCol, yi: yiCol, cost: costCol },
+    };
   }
 }
 

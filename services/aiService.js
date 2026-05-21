@@ -277,6 +277,89 @@ ${subjectSummary}${examNote}
    * @param {number|null} examDays    - 距期末考天數（null = 不用提醒）
    * @returns {string|null} 合併後的年級 AI 評語
    */
+  // ─────────────────────────────────────────────────────────────────────────
+  // 【一次性】根據歷次成績初步認識學生（雙 AI 協作）
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * 根據歷次月考成績，讓 AI 對學生做初步學科強弱分析
+   * @param {string} studentName  - 學生姓名（含英文名）
+   * @param {string} scoresSummary - 格式化後的成績字串（來自 getStudentScores）
+   * @returns {{ jiaText, yiText, costInfo } | null}
+   */
+  async analyzeStudentFromScores(studentName, scoresSummary) {
+    await this._initPromise;
+    if (!this.client) return null;
+
+    const chineseName = studentName.replace(/[^一-鿿]/g, '').trim() || studentName;
+
+    // ── Claude 甲：學習習慣與潛力初判 ──
+    const jiaPrompt = `你是英典教育的AI學習顧問（習慣分析師）。以下是一位學生的歷次月考成績記錄，請根據這些數字，用繁體中文產出兩個段落，幫老師初步認識這位學生：
+
+【科目強弱概覽】2句，指出哪些科目分數較高（優勢）、哪些較低（需關注），說明整體學習水平。
+【學習節奏觀察】2句，根據各次成績的起伏，判斷學生是否穩定，有無明顯進退步趨勢。
+
+格式要求：
+- 兩段以空行分隔，各段前保留「【】」標題
+- 總字數不超過150字
+- 語氣溫暖、專業，不要加稱呼，直接輸出內容
+
+學生姓名：${chineseName}
+${scoresSummary}`;
+
+    // ── Claude 乙：學科深度分析與建議 ──
+    const yiPrompt = `你是英典教育的AI學科分析師（Claude 乙）。你的同事（Claude 甲）已對以下學生的成績做了初步觀察，請你補充更具體的學科建議。
+
+同事的評語（供參考，不要重複）：
+{JIA_PLACEHOLDER}
+
+學生姓名：${chineseName}
+${scoresSummary}
+
+你的任務：
+【重點強化建議】2-3句，根據成績數據，具體指出哪1-2科最需要優先加強（點名科目+理由），以及可採用什麼方式加強（如多做題目、加強閱讀、練習寫作等）。
+
+要求：總字數不超過100字，不重複甲已說過的內容，直接輸出。`;
+
+    try {
+      // Claude 甲
+      const jiaRes = await this.client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
+        messages: [{ role: 'user', content: jiaPrompt }],
+      });
+      const jiaText = jiaRes.content[0]?.text?.trim() || null;
+      if (!jiaText) return null;
+
+      // Claude 乙（把甲的結果帶入）
+      const yiPromptFinal = yiPrompt.replace('{JIA_PLACEHOLDER}', jiaText);
+      let yiText = null;
+      let yiUsage = { input_tokens: 0, output_tokens: 0 };
+      try {
+        const yiRes = await this.client.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 300,
+          messages: [{ role: 'user', content: yiPromptFinal }],
+        });
+        yiText = yiRes.content[0]?.text?.trim() || null;
+        yiUsage = yiRes.usage;
+      } catch (e) {
+        console.warn(`[AI乙成績] ${studentName} 學科分析失敗：${e.message}`);
+      }
+
+      const inputTokens  = (jiaRes.usage?.input_tokens  || 0) + (yiUsage?.input_tokens  || 0);
+      const outputTokens = (jiaRes.usage?.output_tokens || 0) + (yiUsage?.output_tokens || 0);
+      const costInfo = this._formatCostInfo(inputTokens, outputTokens);
+      console.log(`[AI成績分析] ${studentName} ${costInfo}`);
+
+      return { jiaText, yiText, costInfo };
+    } catch (error) {
+      const status = error.status || error.statusCode || 'unknown';
+      console.error(`[AI成績分析] ${studentName} 失敗 (HTTP ${status}):`, error.message);
+      return null;
+    }
+  }
+
   async analyzeGradeProgress(grade, gradeRecords, allStudentsInGrade = [], studentComparison = '', examDays = null) {
     await this._initPromise;
     if (!this.client) return null;

@@ -976,6 +976,18 @@ app.get('/api/trigger/grade-send-reports', async (req, res) => {
     res.status(500).json({ success: false, error: e.message });
   }
 });
+// 【一次性】成績初步認識：讀成績記錄表 → 雙 AI 分析 → 寫回工作表末尾三欄
+app.get('/api/trigger/analyze-scores-intro', async (req, res) => {
+  try {
+    console.log('[trigger/analyze-scores-intro] 開始成績初步分析...');
+    const result = await homeworkService.analyzeAndSaveScoreIntros();
+    res.json(result);
+  } catch (e) {
+    console.error('[trigger/analyze-scores-intro]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 // LINE 診斷 API：檢查 Token 有效性 + 每月配額
