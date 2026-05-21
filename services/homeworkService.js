@@ -947,6 +947,56 @@ class HomeworkService {
   }
 
   /**
+   * 【一次性清除】刪除「成績記錄」末尾的 AI 三欄（標題 + 所有資料）
+   */
+  async clearScoreIntros() {
+    if (!this.sheets) await this.init();
+    if (!this.sheets) throw new Error('GOOGLE_SHEETS_NOT_CONFIGURED');
+
+    const AI_HEADERS = ['AI原始評語1(甲)', 'AI原始評語2(乙)', 'Token費用'];
+
+    const colLetter = (idx) => {
+      let s = '';
+      idx++;
+      while (idx > 0) {
+        idx--;
+        s = String.fromCharCode(65 + (idx % 26)) + s;
+        idx = Math.floor(idx / 26);
+      }
+      return s;
+    };
+
+    // 讀取標題列找出 AI 欄的位置
+    const response = await this.sheets.spreadsheets.values.get({
+      spreadsheetId: this.spreadsheetId,
+      range: '成績記錄!A1:Z1',
+    });
+    const headers = (response.data.values || [[]])[0] || [];
+    const colIndexes = headers.map((h, i) => AI_HEADERS.includes(h) ? i : null).filter(i => i !== null);
+
+    if (colIndexes.length === 0) {
+      return { success: true, message: '找不到 AI 欄位，可能已清除或尚未建立' };
+    }
+
+    // 取得總列數
+    const dataRes = await this.sheets.spreadsheets.values.get({
+      spreadsheetId: this.spreadsheetId,
+      range: '成績記錄!A:A',
+    });
+    const totalRows = (dataRes.data.values || []).length;
+
+    // 清空每個 AI 欄（包含標題）
+    const ranges = colIndexes.map(idx => `成績記錄!${colLetter(idx)}1:${colLetter(idx)}${totalRows}`);
+    await this.sheets.spreadsheets.values.batchClear({
+      spreadsheetId: this.spreadsheetId,
+      resource: { ranges },
+    });
+
+    console.log(`[GSheets] 已清除成績記錄的 AI 欄：${colIndexes.map(i => colLetter(i)).join(', ')}`);
+    return { success: true, message: `已清除 ${colIndexes.length} 個 AI 欄位（共 ${totalRows} 列）`, clearedCols: colIndexes.map(i => colLetter(i)) };
+  }
+
+  /**
    * 【一次性】讀取「成績記錄」所有學生，讓雙 AI 進行初步認識，
    * 並將結果寫回同一工作表的末尾三欄：AI原始評語1(甲) / AI原始評語2(乙) / Token費用
    */

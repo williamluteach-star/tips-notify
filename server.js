@@ -976,6 +976,17 @@ app.get('/api/trigger/grade-send-reports', async (req, res) => {
     res.status(500).json({ success: false, error: e.message });
   }
 });
+// 【一次性清除】刪除成績記錄表中的 AI 三欄（AI甲/AI乙/Token費用）
+app.get('/api/trigger/clear-scores-intro', async (req, res) => {
+  try {
+    const result = await homeworkService.clearScoreIntros();
+    res.json(result);
+  } catch (e) {
+    console.error('[trigger/clear-scores-intro]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // 【一次性】成績初步認識：讀成績記錄表 → 雙 AI 分析 → 寫回工作表末尾三欄
 app.get('/api/trigger/analyze-scores-intro', async (req, res) => {
   try {
