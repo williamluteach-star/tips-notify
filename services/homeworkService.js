@@ -907,8 +907,12 @@ class HomeworkService {
   /**
    * 讀取「成績記錄」工作表中指定學生的月考成績
    *
-   * 格式彈性：第一列為任意欄位標題（例如你原有的成績表），
-   * 第一欄為學生姓名，程式自動配對標題與數值，不強制固定欄位。
+   * 支援兩列 header 格式：
+   *   第一列：考期名（合併儲存格，例如「113上 一次段考」）
+   *   第二列：科目名（國文、英文、數學⋯）
+   *   第三列起：學生資料
+   *
+   * 若只有一列 header，自動退回單列模式。
    *
    * @returns {string} 供 AI prompt 使用的成績文字，找不到資料回傳空字串
    */
@@ -916,7 +920,6 @@ class HomeworkService {
     if (!this.sheets) await this.init();
     if (!this.sheets) return '';
     try {
-      // 讀取含標題列的全部資料（A1 開始，最多 Z 欄）
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: '成績記錄!A1:Z',
@@ -924,24 +927,60 @@ class HomeworkService {
       const rows = response.data.values || [];
       if (rows.length < 2) return '';
 
-      const headers = rows[0];
-      const dataRow = rows.slice(1).find(r => r[0] === studentName);
+      // ── 判斷是單列 header 還是雙列 header ──
+      // 如果第二列第一欄是「學生姓名」，代表雙列格式
+      const isTwoRowHeader = rows.length >= 3 && (rows[1][0] === '學生姓名' || rows[1][0] === '姓名');
+
+      let colLabels; // 每個欄位的完整標籤
+      let dataRows;  // 學生資料列
+
+      if (isTwoRowHeader) {
+        // 第一列：考期（合併儲存格，fill forward）
+        const periodRow = rows[0];
+        let currentPeriod = '';
+        const periods = periodRow.map(cell => {
+          if (cell && cell.trim()) currentPeriod = cell.trim();
+          return currentPeriod;
+        });
+
+        // 第二列：科目
+        const subjectRow = rows[1];
+
+        // 組合標籤：「113上 一次段考 國文」，A/B 欄（姓名/年級）直接用科目名
+        colLabels = subjectRow.map((subj, i) => {
+          if (i <= 1) return subj || ''; // 姓名、年級欄
+          const period = periods[i] || '';
+          const subject = subj || '';
+          return period && subject ? `${period} ${subject}` : (subject || period);
+        });
+
+        dataRows = rows.slice(2);
+      } else {
+        // 單列 header 模式（原有行為）
+        colLabels = rows[0];
+        dataRows = rows.slice(1);
+      }
+
+      // 找學生
+      const dataRow = dataRows.find(r => r[0] === studentName);
       if (!dataRow) return '';
 
-      // 把標題與數值配對（跳過第一欄學生姓名），有值才輸出
-      const pairs = headers
-        .map((h, i) => {
-          if (i === 0) return null; // 跳過姓名欄
+      // 把標籤與數值配對（跳過第一欄姓名，第二欄年級也跳過）
+      const skipCols = isTwoRowHeader ? 2 : 1;
+      const pairs = colLabels
+        .map((label, i) => {
+          if (i < skipCols) return null;
           const val = (dataRow[i] || '').trim();
+          // 跳過「平均」「班排」「校排」之類的統計欄
           if (!val) return null;
-          return `  ${h}：${val}`;
+          if (['班排', '校排', '班名', '校名'].includes(label.split(' ').pop())) return null;
+          return `  ${label}：${val}`;
         })
         .filter(Boolean);
 
       if (pairs.length === 0) return '';
       return `【歷次月考成績記錄】\n${pairs.join('\n')}`;
     } catch (error) {
-      // 工作表不存在時靜默略過，不影響主流程
       return '';
     }
   }
@@ -999,6 +1038,8 @@ class HomeworkService {
   /**
    * 【一次性】讀取「成績記錄」所有學生，讓雙 AI 進行初步認識，
    * 並將結果寫回同一工作表的末尾三欄：AI原始評語1(甲) / AI原始評語2(乙) / Token費用
+   *
+   * 支援兩列 header 格式（第一列=考期、第二列=科目）
    */
   async analyzeAndSaveScoreIntros() {
     if (!this.sheets) await this.init();
@@ -1006,7 +1047,7 @@ class HomeworkService {
 
     const aiService = require('./aiService');
 
-    // 1. 讀取整張成績記錄表（A1:Z，含標題列）
+    // 1. 讀取整張成績記錄表
     const response = await this.sheets.spreadsheets.values.get({
       spreadsheetId: this.spreadsheetId,
       range: '成績記錄!A1:Z',
@@ -1014,61 +1055,72 @@ class HomeworkService {
     const rows = response.data.values || [];
     if (rows.length < 2) return { success: false, message: '成績記錄工作表沒有資料' };
 
-    const headers = rows[0];
-    const dataRows = rows.slice(1).filter(r => r[0]); // 只處理有姓名的列
-
-    // 2. 找出目前最後一欄（成績欄）的位置
-    //    若 header 最後幾欄已是 AI 欄位，先移除，重新寫入
-    const AI_HEADERS = ['AI原始評語1(甲)', 'AI原始評語2(乙)', 'Token費用'];
-    let scoreColCount = headers.length;
-    // 移除尾端已有的 AI 欄位，避免重複疊加
-    while (scoreColCount > 0 && AI_HEADERS.includes(headers[scoreColCount - 1])) {
-      scoreColCount--;
-    }
-
-    // 3. 計算要寫入的欄位位置（1-based）：成績欄之後接 3 欄
-    const jiaColIdx  = scoreColCount;     // 0-based index
-    const yiColIdx   = scoreColCount + 1;
-    const costColIdx = scoreColCount + 2;
+    // 2. 判斷單列 / 雙列 header
+    const isTwoRowHeader = rows.length >= 3 && (rows[1][0] === '學生姓名' || rows[1][0] === '姓名');
+    const headerRowCount = isTwoRowHeader ? 2 : 1;
 
     // 欄位字母轉換（支援 A-Z, AA-AZ...）
     const colLetter = (idx) => {
       let s = '';
-      idx++; // 轉成 1-based
-      while (idx > 0) {
-        idx--;
-        s = String.fromCharCode(65 + (idx % 26)) + s;
-        idx = Math.floor(idx / 26);
-      }
+      idx++;
+      while (idx > 0) { idx--; s = String.fromCharCode(65 + (idx % 26)) + s; idx = Math.floor(idx / 26); }
       return s;
     };
 
-    const jiaCol  = colLetter(jiaColIdx);
-    const yiCol   = colLetter(yiColIdx);
-    const costCol = colLetter(costColIdx);
+    // 3. 建立每欄的完整標籤（雙列：考期+科目；單列：直接用標題）
+    let colLabels;
+    if (isTwoRowHeader) {
+      const periodRow  = rows[0];
+      const subjectRow = rows[1];
+      let currentPeriod = '';
+      colLabels = subjectRow.map((subj, i) => {
+        if (periodRow[i] && periodRow[i].trim()) currentPeriod = periodRow[i].trim();
+        if (i <= 1) return subj || ''; // 姓名、年級欄
+        const subject = (subj || '').trim();
+        return currentPeriod && subject ? `${currentPeriod} ${subject}` : (subject || currentPeriod);
+      });
+    } else {
+      colLabels = rows[0];
+    }
 
-    // 4. 先寫入（或更新）表頭的 AI 三欄
-    const headerRow = 1;
+    // 4. 找出成績欄數（排除已有的 AI 欄）
+    const AI_HEADERS = ['AI原始評語1(甲)', 'AI原始評語2(乙)', 'Token費用'];
+    let scoreColCount = colLabels.length;
+    while (scoreColCount > 0 && AI_HEADERS.includes(colLabels[scoreColCount - 1])) scoreColCount--;
+
+    const jiaCol  = colLetter(scoreColCount);
+    const yiCol   = colLetter(scoreColCount + 1);
+    const costCol = colLetter(scoreColCount + 2);
+
+    // 5. 寫入 AI 欄標題（雙列 header → 寫在第二列；單列 → 第一列）
+    const aiHeaderSheetRow = isTwoRowHeader ? 2 : 1;
     await this.sheets.spreadsheets.values.update({
       spreadsheetId: this.spreadsheetId,
-      range: `成績記錄!${jiaCol}${headerRow}:${costCol}${headerRow}`,
+      range: `成績記錄!${jiaCol}${aiHeaderSheetRow}:${costCol}${aiHeaderSheetRow}`,
       valueInputOption: 'USER_ENTERED',
       resource: { values: [AI_HEADERS] },
     });
 
-    // 5. 逐一分析每位學生並寫回
+    // 6. 學生資料列
+    const dataRows = rows.slice(headerRowCount).filter(r => r[0] && r[0] !== '學生姓名');
+    const skipCols = isTwoRowHeader ? 2 : 1; // 跳過姓名（+年級）欄
+
+    // 7. 逐一分析
     const results = [];
     for (let i = 0; i < dataRows.length; i++) {
-      const dataRow = dataRows[i];
+      const dataRow    = dataRows[i];
       const studentName = dataRow[0];
-      const sheetRow = i + 2; // 1-based + 1 header
+      const sheetRow   = i + headerRowCount + 1; // 1-based
 
       // 組成成績摘要
-      const pairs = headers.slice(0, scoreColCount)
-        .map((h, idx) => {
-          if (idx === 0) return null;
+      const pairs = colLabels.slice(0, scoreColCount)
+        .map((label, idx) => {
+          if (idx < skipCols) return null;
           const val = (dataRow[idx] || '').trim();
-          return val ? `  ${h}：${val}` : null;
+          if (!val) return null;
+          const lastWord = label.split(' ').pop();
+          if (['班排', '校排', '班名', '校名', '平均'].includes(lastWord)) return null;
+          return `  ${label}：${val}`;
         })
         .filter(Boolean);
 
@@ -1091,7 +1143,6 @@ class HomeworkService {
       }
 
       const { jiaText, yiText, costInfo } = aiResult;
-
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
         range: `成績記錄!${jiaCol}${sheetRow}:${costCol}${sheetRow}`,
@@ -1099,10 +1150,9 @@ class HomeworkService {
         resource: { values: [[jiaText || '', yiText || '', costInfo || '']] },
       });
 
-      console.log(`[成績分析] ${studentName} ✅ 寫入完成`);
+      console.log(`[成績分析] ${studentName} ✅`);
       results.push({ studentName, success: true, costInfo });
 
-      // 避免 API rate limit
       await new Promise(r => setTimeout(r, 800));
     }
 
