@@ -262,6 +262,17 @@ class NotificationService {
         msg += `\n\n${randomFrom(PARENT_ENCOURAGEMENTS)}`;
         msg += `\n\n${ATOMIC_POWER}`;
 
+        // 雙 AI 分析：附加甲（習慣）+ 乙（學科）年級觀察
+        try {
+          const aiGradeText = await aiService.analyzeGradeProgress(grade, gradeRecords);
+          if (aiGradeText) {
+            msg += `\n\n━━━━━━━━━━━━━━━━\n🤖 AI 老師年級觀察\n\n${aiGradeText}`;
+            console.log(`[年級週報] ✅ ${grade}年級 AI分析已附加`);
+          }
+        } catch (e) {
+          console.warn(`[年級週報] ${grade}年級 AI分析失敗（略過）:`, e.message);
+        }
+
         await homeworkService.saveGradeReport({ period, grade, msgText: msg });
         console.log(`[年級週報] ✅ ${grade}年級 已存入待審`);
         results.push({ grade, success: true });
