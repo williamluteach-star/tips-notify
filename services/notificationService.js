@@ -62,6 +62,30 @@ function randomFrom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+/**
+ * 從完整學生姓名提取「名」（去掉姓）＋ 保留英文名
+ * 趙品懿 Yasmin → 品懿 Yasmin
+ * 李明 → 明
+ */
+function extractGivenName(fullName) {
+  const cn = (fullName || '').replace(/[^一-鿿]/g, '').trim();
+  const en = ((fullName || '').match(/[A-Za-z]+/) || [])[0] || '';
+  const givenCn = cn.length > 1 ? cn.slice(1) : cn;
+  return en ? `${givenCn} ${en}` : givenCn;
+}
+
+/**
+ * 計算距離期末考還有幾天（期末考約 6/25～6/30，各校不同）
+ * 超過 30 天返回 null（不需要提醒）
+ */
+function daysUntilExam() {
+  const now = moment().utcOffset('+08:00');
+  const year = now.month() >= 6 ? now.year() + 1 : now.year(); // 7月後看明年
+  const examDate = moment(`${year}-06-25`);
+  const days = examDate.diff(now, 'days');
+  return days >= 0 && days <= 35 ? days : null;
+}
+
 class NotificationService {
   /**
    * 從 parent-pairs.json 取得某學生所有配對的家長 LINE ID
@@ -251,20 +275,37 @@ class NotificationService {
           return `${masked}\n${Object.entries(byDate).map(([d, items]) => `  ${d}　${items.join('、')}`).join('\n')}`;
         });
 
-        const reportStudentCount = Object.keys(byStudent).length;
         const totalItems = gradeRecords.length;
+
+        // 未回報的學生名單（可能請假或未繳）
+        const noReportStudents = studentsInGrade
+          .filter(s => !byStudent[s.studentName])
+          .map(s => maskChineseName(s.studentName));
+
+        // 每位學生項數對比（供 AI 比較用）
+        const studentComparison = studentsInGrade.map(s => {
+          const count = byStudent[s.studentName]?.length || 0;
+          return `${maskChineseName(s.studentName)}：${count > 0 ? count + '項' : '⚠️ 無回報'}`;
+        }).join('、');
+
+        // 期末考倒數
+        const examDays = daysUntilExam();
 
         let msg = `📊【${startFmt}～${endFmt} 年級學習進度週報】（${grade}年級）\n\n`;
         msg += studentLines.join('\n\n');
-        msg += `\n\n────────────────\n`;
-        msg += `📈 本週共 ${reportStudentCount} 位同學回報進度，合計 ${totalItems} 項\n\n`;
-        msg += randomFrom(STUDENT_ENCOURAGEMENTS);
-        msg += `\n\n${randomFrom(PARENT_ENCOURAGEMENTS)}`;
-        msg += `\n\n${ATOMIC_POWER}`;
+        if (noReportStudents.length > 0) {
+          msg += `\n\n⚠️ 本週無回報：${noReportStudents.join('、')}`;
+        }
+        msg += `\n\n────────────────`;
+        if (examDays !== null) {
+          msg += `\n📅 期末考倒數：約 ${examDays} 天（各校約 6/25～6/30）`;
+        }
 
         // 雙 AI 分析：附加甲（習慣）+ 乙（學科）年級觀察
         try {
-          const aiGradeText = await aiService.analyzeGradeProgress(grade, gradeRecords);
+          const aiGradeText = await aiService.analyzeGradeProgress(
+            grade, gradeRecords, studentsInGrade, studentComparison, examDays
+          );
           if (aiGradeText) {
             msg += `\n\n━━━━━━━━━━━━━━━━\n🤖 AI 老師年級觀察\n\n${aiGradeText}`;
             console.log(`[年級週報] ✅ ${grade}年級 AI分析已附加`);
@@ -558,7 +599,9 @@ class NotificationService {
           continue;
         }
 
-        const msg = `🤖【${startFmt}～${endFmt} AI 老師本週觀察】\n\n${studentName}\n\n${finalText}\n\n感謝您的關注 🙏`;
+        // 只顯示名（去掉姓），保留英文名，看起來更親切
+        const displayName = extractGivenName(studentName);
+        const msg = `🤖【${startFmt}～${endFmt} AI 老師本週觀察】\n\n${displayName}\n\n${finalText}\n\n${randomFrom(STUDENT_ENCOURAGEMENTS)}\n\n${randomFrom(PARENT_ENCOURAGEMENTS)}\n\n感謝您的關注 🙏`;
 
         for (const uid of lineUserIds) {
           try {
