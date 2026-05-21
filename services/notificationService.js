@@ -63,6 +63,19 @@ function randomFrom(arr) {
 }
 
 /**
+ * 判斷作業項目是否為請假記錄，並返回假別
+ * "病假" → "病假"、"事假" → "事假"、其他 → null
+ */
+const LEAVE_TYPES = ['病假', '事假', '公假', '喪假'];
+function parseLeaveType(item) {
+  if (!item) return null;
+  for (const t of LEAVE_TYPES) {
+    if (item.trim() === t || item.includes(t)) return t;
+  }
+  return null;
+}
+
+/**
  * 從完整學生姓名提取「名」（去掉姓）＋ 保留英文名
  * 趙品懿 Yasmin → 品懿 Yasmin
  * 李明 → 明
@@ -266,16 +279,32 @@ class NotificationService {
 
         const studentLines = Object.entries(byStudent).map(([name, recs]) => {
           const masked = maskChineseName(name);
+          const leaveRecs = recs.filter(r => parseLeaveType(r.作業項目));
+          const hwRecs    = recs.filter(r => !parseLeaveType(r.作業項目));
           const byDate = {};
-          recs.forEach(r => {
+          hwRecs.forEach(r => {
             const d = moment(r.時間戳記, ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss']).format('MM/DD');
             if (!byDate[d]) byDate[d] = [];
             byDate[d].push(r.作業項目);
           });
-          return `${masked}\n${Object.entries(byDate).map(([d, items]) => `  ${d}　${items.join('、')}`).join('\n')}`;
+          let line = masked;
+          if (Object.keys(byDate).length > 0) {
+            line += `\n${Object.entries(byDate).map(([d, items]) => `  ${d}　${items.join('、')}`).join('\n')}`;
+          }
+          if (leaveRecs.length > 0) {
+            const leaveStr = leaveRecs.map(r => {
+              const lt = parseLeaveType(r.作業項目);
+              if (lt === '病假') return '🏥 病假';
+              if (lt === '事假') return '📋 事假';
+              if (lt === '公假') return '📌 公假';
+              return '🕊️ 喪假';
+            }).join('、');
+            line += `\n  （${leaveStr}）`;
+          }
+          return line;
         });
 
-        const totalItems = gradeRecords.length;
+        const totalItems = gradeRecords.filter(r => !parseLeaveType(r.作業項目)).length;
 
         // 未回報的學生名單（可能請假或未繳）
         const noReportStudents = studentsInGrade
@@ -536,8 +565,17 @@ class NotificationService {
       });
 
       const results = [];
-      for (const [studentName, weekRecords] of Object.entries(grouped)) {
-        const aiText = await aiService.analyzeStudentProgress(studentName, weekRecords);
+      for (const [studentName, allRecs] of Object.entries(grouped)) {
+        const leaveRecs  = allRecs.filter(r => parseLeaveType(r.作業項目));
+        const weekRecords = allRecs.filter(r => !parseLeaveType(r.作業項目));
+        const leaveSummary = leaveRecs.length > 0
+          ? leaveRecs.map(r => {
+              const raw = r.時間戳記 || r.完成時間 || '';
+              const d = moment(raw, ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss']).format('MM/DD');
+              return `  ${d}：${r.作業項目}`;
+            }).join('\n')
+          : '';
+        const aiText = await aiService.analyzeStudentProgress(studentName, weekRecords, leaveSummary);
         if (!aiText) {
           console.warn(`[AI產生] ${studentName} AI 分析失敗`);
           results.push({ studentName, success: false });

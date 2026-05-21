@@ -54,14 +54,17 @@ class AIService {
   /**
    * 【Claude 甲】學習習慣觀察：本週模式 + 下週方向
    */
-  async _analyzeHabits(chineseName, activeDays, totalItems, recordSummary, examDays) {
+  async _analyzeHabits(chineseName, activeDays, totalItems, recordSummary, examDays, leaveSummary = '') {
     const examNote = examDays !== null
       ? `\n⚠️ 期末考備考提醒：距離期末考（各校約6/25～6/30）還有 ${examDays} 天，請在【下週建議】中加入備考複習的具體提醒。`
+      : '';
+    const leaveNote = leaveSummary
+      ? `\n本週請假記錄：\n${leaveSummary}\n（病假：適時關心提醒多休息；事假：提醒把握時間補回進度）`
       : '';
 
     const prompt = `你是英典教育的AI學習顧問（習慣分析師）。請根據以下學生本週（週一至週五）的學習記錄，用繁體中文產出兩個段落：
 
-【本週觀察】2-3句，描述本週的學習模式（哪幾天有記錄、完成量、節奏特徵）。
+【本週觀察】2-3句，描述本週的學習模式（哪幾天有記錄、完成量、節奏特徵）。若有請假，請簡短提及。
 【下週建議】1-2句，給出下週具體可行的學習方向，包含應繼續強化或需要調整的重點。
 
 格式要求：
@@ -71,9 +74,9 @@ class AIService {
 
 學生姓名：${chineseName}
 本週出現天數：${activeDays} 天（本週共5天）
-本週完成項數：${totalItems} 項
+本週完成作業項數：${totalItems} 項${leaveNote}
 學習記錄（週一～週五）：
-${recordSummary || '  本週無任何記錄'}`;
+${recordSummary || '  本週無任何作業記錄'}`;
 
     const response = await this.client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -124,7 +127,7 @@ ${recordSummary || '  本週無任何記錄'}
    * @param {Array}  weekRecords - 週一～週五記錄
    * @returns {string|null} 合併後的 AI 評語
    */
-  async analyzeStudentProgress(studentName, weekRecords) {
+  async analyzeStudentProgress(studentName, weekRecords, leaveSummary = '') {
     await this._initPromise;
     if (!this.client) return null;
 
@@ -152,7 +155,7 @@ ${recordSummary || '  本週無任何記錄'}
 
     try {
       // ── Claude 甲：習慣分析 ──
-      const jiaText = await this._analyzeHabits(chineseName, activeDays, totalItems, recordSummary, examDaysArg);
+      const jiaText = await this._analyzeHabits(chineseName, activeDays, totalItems, recordSummary, examDaysArg, leaveSummary);
       if (!jiaText) {
         console.warn(`[AI甲] ${studentName} 習慣分析失敗`);
         return null;
