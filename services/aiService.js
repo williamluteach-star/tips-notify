@@ -64,7 +64,7 @@ class AIService {
 
     const prompt = `你是英典教育的AI學習顧問（習慣分析師）。請根據以下學生本週（週一至週五）的學習記錄，用繁體中文產出兩個段落：
 
-【本週觀察】2-3句，描述本週的學習模式（哪幾天有記錄、完成量、節奏特徵）。若有請假，請簡短提及。
+【本週觀察】2-3句，描述本週的學習狀況（哪幾天有記錄、各項目的內容份量與深度、學習節奏）。若有請假，請簡短提及。請根據項目內容評估學習的「量」，而非僅計算項目數量。
 【下週建議】1-2句，給出下週具體可行的學習方向，包含應繼續強化或需要調整的重點。
 
 格式要求：
@@ -73,9 +73,8 @@ class AIService {
 - 語氣溫暖、專業，不要加稱呼，直接輸出內容${examNote}
 
 學生姓名：${chineseName}
-本週出現天數：${activeDays} 天（本週共5天）
-本週完成作業項數：${totalItems} 項${leaveNote}
-學習記錄（週一～週五）：
+本週出現天數：${activeDays} 天（本週共5天）${leaveNote}
+學習記錄（週一～週五，請依各項目的內容份量評估學習量）：
 ${recordSummary || '  本週無任何作業記錄'}`;
 
     const response = await this.client.messages.create({
@@ -185,16 +184,13 @@ ${recordSummary || '  本週無任何記錄'}
         console.warn(`[AI乙] ${studentName} 學科分析失敗：${e.message}`);
       }
 
-      // 合併文字
-      const text = yi?.text ? `${jia.text}\n\n${yi.text}` : jia.text;
-
       // 累計 token 用量
       const inputTokens  = (jia.usage?.input_tokens  || 0) + (yi?.usage?.input_tokens  || 0);
       const outputTokens = (jia.usage?.output_tokens || 0) + (yi?.usage?.output_tokens || 0);
       const costInfo = this._formatCostInfo(inputTokens, outputTokens);
       console.log(`[AI] ${studentName} ${costInfo}`);
 
-      return { text, inputTokens, outputTokens, costInfo };
+      return { jiaText: jia.text, yiText: yi?.text || null, inputTokens, outputTokens, costInfo };
 
     } catch (error) {
       const status = error.status || error.statusCode || (error.response?.status) || 'unknown';
@@ -221,7 +217,7 @@ ${recordSummary || '  本週無任何記錄'}
 
     const prompt = `你是英典教育的AI學習顧問（習慣分析師）。以下是 ${grade} 年級本週（週一至週五）的整體學習數據，請用繁體中文產出：
 
-【年級學習觀察】2-3句，比較各學生的進度差異，點名表現較突出與較少回報的學生（用遮蔽名如「張O菲」），若有無回報的學生請提醒老師關心是否請假。
+【年級學習觀察】2-3句，比較各學生的學習份量差異（根據各學生的作業項目內容評估學習量，而非僅計算項目數），點名表現較突出與較少回報的學生（用遮蔽名如「張O菲」），若有無回報的學生請提醒老師關心。
 【下週年級方向】1-2句，給出全年級共同的下週學習建議。
 
 格式要求：
@@ -232,9 +228,8 @@ ${recordSummary || '  本週無任何記錄'}
 年級：${grade} 年級
 全班人數：${totalStudents} 人
 本週有回報：${reportingCount} 人，無回報：${noReportCount} 人
-本週完成總項數：${totalItems} 項（有回報者平均 ${avgItems} 項）
 各日回報情況：${activeDays}
-各學生本週項數：${studentComparison}`;
+各學生本週學習項目份量：${studentComparison}`;
 
     const response = await this.client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -321,14 +316,12 @@ ${subjectSummary}${examNote}
         console.warn(`[AI乙年級] ${grade}年級 學科分析失敗：${e.message}`);
       }
 
-      const text = yi?.text ? `${jia.text}\n\n${yi.text}` : jia.text;
-
       const inputTokens  = (jia.usage?.input_tokens  || 0) + (yi?.usage?.input_tokens  || 0);
       const outputTokens = (jia.usage?.output_tokens || 0) + (yi?.usage?.output_tokens || 0);
       const costInfo = this._formatCostInfo(inputTokens, outputTokens);
       console.log(`[AI年級] ${grade}年級 ${costInfo}`);
 
-      return { text, inputTokens, outputTokens, costInfo };
+      return { jiaText: jia.text, yiText: yi?.text || null, inputTokens, outputTokens, costInfo };
     } catch (error) {
       const status = error.status || error.statusCode || (error.response?.status) || 'unknown';
       console.error(`[AI年級] ${grade}年級分析失敗 (HTTP ${status}):`, error.message);

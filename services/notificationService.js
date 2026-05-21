@@ -277,7 +277,9 @@ class NotificationService {
       const gradeMap = {};
       allStudents.forEach(s => { if (s.grade) gradeMap[s.studentName] = String(s.grade); });
 
-      const grades = [...new Set(records.map(r => gradeMap[r.學生姓名]).filter(Boolean))].sort();
+      // 年級週報只產出 7~9 年級
+      const TARGET_GRADES = ['7', '8', '9'];
+      const grades = [...new Set(records.map(r => gradeMap[r.學生姓名]).filter(g => g && TARGET_GRADES.includes(g)))].sort();
       const startFmt = moment(startDate).format('MM/DD');
       const endFmt   = moment(endDate).format('MM/DD');
       const results  = [];
@@ -345,22 +347,25 @@ class NotificationService {
           msg += `\n📅 期末考倒數：約 ${examDays} 天（各校約 6/25～6/30）`;
         }
 
-        // 雙 AI 分析：附加甲（習慣）+ 乙（學科）年級觀察
-        let gradeCostInfo = '';
+        // 雙 AI 分析：甲（習慣）+ 乙（學科）年級觀察
+        let jiaAiText = '', yiAiText = '', gradeCostInfo = '';
         try {
           const aiGradeResult = await aiService.analyzeGradeProgress(
             grade, gradeRecords, studentsInGrade, studentComparison, examDays
           );
           if (aiGradeResult) {
-            msg += `\n\n━━━━━━━━━━━━━━━━\n🤖 AI 老師年級觀察\n\n${aiGradeResult.text}`;
+            jiaAiText = aiGradeResult.jiaText || '';
+            yiAiText  = aiGradeResult.yiText  || '';
             gradeCostInfo = aiGradeResult.costInfo || '';
+            const aiBlock = [jiaAiText, yiAiText].filter(Boolean).join('\n\n');
+            if (aiBlock) msg += `\n\n━━━━━━━━━━━━━━━━\n🤖 AI 老師年級觀察\n\n${aiBlock}`;
             console.log(`[年級週報] ✅ ${grade}年級 AI分析已附加`);
           }
         } catch (e) {
           console.warn(`[年級週報] ${grade}年級 AI分析失敗（略過）:`, e.message);
         }
 
-        await homeworkService.saveGradeReport({ period, grade, msgText: msg, costInfo: gradeCostInfo });
+        await homeworkService.saveGradeReport({ period, grade, jiaText: jiaAiText, yiText: yiAiText, fullMsg: msg, costInfo: gradeCostInfo });
         console.log(`[年級週報] ✅ ${grade}年級 已存入待審`);
         results.push({ grade, success: true });
       }
@@ -598,8 +603,8 @@ class NotificationService {
           results.push({ studentName, success: false });
           continue;
         }
-        const { text: aiText, costInfo } = aiResult;
-        await homeworkService.saveAIAnalysis({ period, studentName, aiText, costInfo });
+        const { jiaText, yiText, costInfo } = aiResult;
+        await homeworkService.saveAIAnalysis({ period, studentName, jiaText, yiText, costInfo });
         console.log(`[AI產生] ✅ ${studentName} 已儲存`);
         results.push({ studentName, success: true });
       }

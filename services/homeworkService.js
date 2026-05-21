@@ -662,41 +662,39 @@ class HomeworkService {
 
   /**
    * 儲存 AI 評語到「AI評語待審」工作表
-   * 欄位：A=週期, B=學生姓名, C=AI原始評語, D=最終評語, E=狀態, F=產生時間, G=Token費用
+   * 欄位：A=週期, B=學生姓名, C=AI原始評語1(甲:習慣), D=AI原始評語2(乙:學科), E=最終評語, F=狀態, G=產生時間, H=Token費用
    */
-  async saveAIAnalysis({ period, studentName, aiText, costInfo = '' }) {
+  async saveAIAnalysis({ period, studentName, jiaText = '', yiText = '', costInfo = '' }) {
     if (!this.sheets) await this.init();
     if (!this.sheets) return null;
-    await this._ensureSheet('AI評語待審', ['週期', '學生姓名', 'AI原始評語', '最終評語', '狀態', '產生時間', 'Token費用']);
+    await this._ensureSheet('AI評語待審', ['週期', '學生姓名', 'AI原始評語1(甲)', 'AI原始評語2(乙)', '最終評語', '狀態', '產生時間', 'Token費用']);
 
+    const combined = yiText ? `${jiaText}\n\n${yiText}` : jiaText;
     const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
     try {
-      // 先查是否已有同週期＋同學生的列（upsert，避免重複）
       const existing = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'AI評語待審!A2:G',
+        range: 'AI評語待審!A2:H',
       });
       const rows = existing.data.values || [];
       const rowIndex = rows.findIndex(r => r[0] === period && r[1] === studentName);
 
       if (rowIndex >= 0) {
-        // 已存在 → 更新 C～G
         const sheetRow = rowIndex + 2;
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
-          range: `AI評語待審!C${sheetRow}:G${sheetRow}`,
+          range: `AI評語待審!C${sheetRow}:H${sheetRow}`,
           valueInputOption: 'USER_ENTERED',
-          resource: { values: [[aiText, aiText, '待審', timestamp, costInfo]] },
+          resource: { values: [[jiaText, yiText, combined, '待審', timestamp, costInfo]] },
         });
         console.log(`[GSheets] AI評語 upsert（更新）：${studentName} / ${period}`);
       } else {
-        // 不存在 → 新增一列
         await this.sheets.spreadsheets.values.append({
           spreadsheetId: this.spreadsheetId,
           range: 'AI評語待審!A2',
           valueInputOption: 'USER_ENTERED',
           insertDataOption: 'INSERT_ROWS',
-          resource: { values: [[period, studentName, aiText, aiText, '待審', timestamp, costInfo]] },
+          resource: { values: [[period, studentName, jiaText, yiText, combined, '待審', timestamp, costInfo]] },
         });
         console.log(`[GSheets] AI評語 upsert（新增）：${studentName} / ${period}`);
       }
@@ -709,18 +707,18 @@ class HomeworkService {
 
   /**
    * 儲存年級週報到「年級週報待審」工作表（upsert）
-   * 欄位：A=週期, B=年級, C=報告文字, D=最終文字, E=狀態, F=產生時間, G=Token費用
+   * 欄位：A=週期, B=年級, C=AI原始評語1(甲:習慣), D=AI原始評語2(乙:學科), E=最終評語, F=狀態, G=產生時間, H=Token費用
    */
-  async saveGradeReport({ period, grade, msgText, costInfo = '' }) {
+  async saveGradeReport({ period, grade, jiaText = '', yiText = '', fullMsg = '', costInfo = '' }) {
     if (!this.sheets) await this.init();
     if (!this.sheets) return null;
-    await this._ensureSheet('年級週報待審', ['週期', '年級', '報告文字', '最終文字', '狀態', '產生時間', 'Token費用']);
+    await this._ensureSheet('年級週報待審', ['週期', '年級', 'AI原始評語1(甲)', 'AI原始評語2(乙)', '最終評語', '狀態', '產生時間', 'Token費用']);
 
     const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
     try {
       const existing = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: '年級週報待審!A2:G',
+        range: '年級週報待審!A2:H',
       });
       const rows = existing.data.values || [];
       const rowIndex = rows.findIndex(r => r[0] === period && r[1] === grade);
@@ -729,9 +727,9 @@ class HomeworkService {
         const sheetRow = rowIndex + 2;
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
-          range: `年級週報待審!C${sheetRow}:G${sheetRow}`,
+          range: `年級週報待審!C${sheetRow}:H${sheetRow}`,
           valueInputOption: 'USER_ENTERED',
-          resource: { values: [[msgText, msgText, '待審', timestamp, costInfo]] },
+          resource: { values: [[jiaText, yiText, fullMsg, '待審', timestamp, costInfo]] },
         });
       } else {
         await this.sheets.spreadsheets.values.append({
@@ -739,7 +737,7 @@ class HomeworkService {
           range: '年級週報待審!A2',
           valueInputOption: 'USER_ENTERED',
           insertDataOption: 'INSERT_ROWS',
-          resource: { values: [[period, grade, msgText, msgText, '待審', timestamp, costInfo]] },
+          resource: { values: [[period, grade, jiaText, yiText, fullMsg, '待審', timestamp, costInfo]] },
         });
       }
       return { period, grade };
@@ -758,23 +756,20 @@ class HomeworkService {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: '年級週報待審!A2:F',
+        range: '年級週報待審!A2:H',
       });
       return (response.data.values || [])
         .filter(row => row[0] === period)
         .map(row => ({
-          period: row[0] || '',
-          grade: row[1] || '',
-          msgText: row[2] || '',
-          finalText: row[3] || row[2] || '',
-          status: row[4] || '待審',
-          createdAt: row[5] || '',
+          period:    row[0] || '',
+          grade:     row[1] || '',
+          jiaText:   row[2] || '',
+          yiText:    row[3] || '',
+          finalText: row[4] || row[2] || '',  // E=最終評語
+          status:    row[5] || '待審',
+          createdAt: row[6] || '',
         }));
     } catch (error) {
-      if (error.message?.includes('Unable to parse range')) {
-        console.warn('[GSheets] 「年級週報待審」工作表不存在。');
-        return [];
-      }
       console.error('取得年級週報錯誤:', error.message);
       return [];
     }
@@ -789,15 +784,15 @@ class HomeworkService {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: '年級週報待審!A2:F',
+        range: '年級週報待審!A2:H',
       });
       const rows = response.data.values || [];
       const updates = rows
         .map((row, i) => ({ row, sheetRow: i + 2 }))
-        .filter(({ row }) => row[0] === period && row[4] !== '已發送');
+        .filter(({ row }) => row[0] === period && row[5] !== '已發送'); // F=狀態
       if (updates.length === 0) return null;
       const data = updates.map(({ sheetRow }) => ({
-        range: `年級週報待審!E${sheetRow}`,
+        range: `年級週報待審!F${sheetRow}`,  // F=狀態
         values: [['已發送']],
       }));
       await this.sheets.spreadsheets.values.batchUpdate({
@@ -821,32 +816,28 @@ class HomeworkService {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'AI評語待審!A2:F',
+        range: 'AI評語待審!A2:H',
       });
 
       return (response.data.values || [])
         .filter(row => row[0] === period)
-        .map((row, i) => ({
-          rowIndex: i, // 相對索引，不可靠，用 studentName 比對
-          period: row[0] || '',
+        .map(row => ({
+          period:      row[0] || '',
           studentName: row[1] || '',
-          aiText: row[2] || '',
-          finalText: row[3] || row[2] || '',
-          status: row[4] || '待審',
-          createdAt: row[5] || '',
+          jiaText:     row[2] || '',
+          yiText:      row[3] || '',
+          finalText:   row[4] || row[2] || '',  // E=最終評語
+          status:      row[5] || '待審',
+          createdAt:   row[6] || '',
         }));
     } catch (error) {
-      if (error.message?.includes('Unable to parse range')) {
-        console.warn('[GSheets] 「AI評語待審」工作表不存在。');
-        return [];
-      }
       console.error('取得 AI 評語錯誤:', error.message);
       return [];
     }
   }
 
   /**
-   * 更新某學生的最終評語（老師修改後）
+   * 更新某學生的最終評語（老師修改後）→ 寫入 E 欄
    */
   async updateAIAnalysisFinal(period, studentName, finalText) {
     if (!this.sheets) await this.init();
@@ -855,7 +846,7 @@ class HomeworkService {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'AI評語待審!A2:F',
+        range: 'AI評語待審!A2:H',
       });
 
       const rows = response.data.values || [];
@@ -865,7 +856,7 @@ class HomeworkService {
       const sheetRow = rowIndex + 2;
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: `AI評語待審!D${sheetRow}`,
+        range: `AI評語待審!E${sheetRow}`,  // E=最終評語
         valueInputOption: 'USER_ENTERED',
         resource: { values: [[finalText]] },
       });
@@ -877,7 +868,7 @@ class HomeworkService {
   }
 
   /**
-   * 標記某週期所有評語為已發送
+   * 標記某週期所有評語為已發送 → 寫入 F 欄（狀態）
    */
   async markAIAnalysesSent(period) {
     if (!this.sheets) await this.init();
@@ -886,18 +877,18 @@ class HomeworkService {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'AI評語待審!A2:F',
+        range: 'AI評語待審!A2:H',
       });
 
       const rows = response.data.values || [];
       const updates = rows
         .map((row, i) => ({ row, sheetRow: i + 2 }))
-        .filter(({ row }) => row[0] === period && row[4] !== '已發送');
+        .filter(({ row }) => row[0] === period && row[5] !== '已發送'); // F=狀態
 
       if (updates.length === 0) return null;
 
       const data = updates.map(({ sheetRow }) => ({
-        range: `AI評語待審!E${sheetRow}`,
+        range: `AI評語待審!F${sheetRow}`,  // F=狀態
         values: [['已發送']],
       }));
 
