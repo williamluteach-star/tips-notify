@@ -83,7 +83,7 @@ ${recordSummary || '  本週無任何作業記錄'}`;
       max_tokens: 400,
       messages: [{ role: 'user', content: prompt }],
     });
-    return response.content[0]?.text?.trim() || null;
+    return { text: response.content[0]?.text?.trim() || null, usage: response.usage };
   }
 
   /**
@@ -118,7 +118,24 @@ ${recordSummary || '  本週無任何記錄'}
       max_tokens: 300,
       messages: [{ role: 'user', content: prompt }],
     });
-    return response.content[0]?.text?.trim() || null;
+    return { text: response.content[0]?.text?.trim() || null, usage: response.usage };
+  }
+
+  /**
+   * 計算 Claude Haiku 4.5 的費用（USD）
+   * 定價：輸入 $0.80/MTok，輸出 $4.00/MTok
+   */
+  _calcCost(inputTokens, outputTokens) {
+    return (inputTokens * 0.80 + outputTokens * 4.00) / 1_000_000;
+  }
+
+  /**
+   * 格式化費用摘要（存入 Sheets G 欄）
+   */
+  _formatCostInfo(inputTokens, outputTokens) {
+    const usd = this._calcCost(inputTokens, outputTokens);
+    const twd = usd * 32.5; // 約略匯率，僅供參考
+    return `輸入 ${inputTokens} / 輸出 ${outputTokens} tokens | $${usd.toFixed(6)} USD (≈ NT$${twd.toFixed(3)})`;
   }
 
   /**
@@ -155,22 +172,30 @@ ${recordSummary || '  本週無任何記錄'}
 
     try {
       // ── Claude 甲：習慣分析 ──
-      const jiaText = await this._analyzeHabits(chineseName, activeDays, totalItems, recordSummary, examDaysArg, leaveSummary);
-      if (!jiaText) {
+      const jia = await this._analyzeHabits(chineseName, activeDays, totalItems, recordSummary, examDaysArg, leaveSummary);
+      if (!jia?.text) {
         console.warn(`[AI甲] ${studentName} 習慣分析失敗`);
         return null;
       }
 
       // ── Claude 乙：學科分析（審閱甲的輸出後補充）──
-      let yiText = null;
+      let yi = null;
       try {
-        yiText = await this._analyzeSubjects(chineseName, recordSummary, jiaText, examDaysArg);
+        yi = await this._analyzeSubjects(chineseName, recordSummary, jia.text, examDaysArg);
       } catch (e) {
         console.warn(`[AI乙] ${studentName} 學科分析失敗：${e.message}`);
       }
 
-      // 合併輸出
-      return yiText ? `${jiaText}\n\n${yiText}` : jiaText;
+      // 合併文字
+      const text = yi?.text ? `${jia.text}\n\n${yi.text}` : jia.text;
+
+      // 累計 token 用量
+      const inputTokens  = (jia.usage?.input_tokens  || 0) + (yi?.usage?.input_tokens  || 0);
+      const outputTokens = (jia.usage?.output_tokens || 0) + (yi?.usage?.output_tokens || 0);
+      const costInfo = this._formatCostInfo(inputTokens, outputTokens);
+      console.log(`[AI] ${studentName} ${costInfo}`);
+
+      return { text, inputTokens, outputTokens, costInfo };
 
     } catch (error) {
       const status = error.status || error.statusCode || (error.response?.status) || 'unknown';
@@ -217,7 +242,7 @@ ${recordSummary || '  本週無任何記錄'}
       max_tokens: 400,
       messages: [{ role: 'user', content: prompt }],
     });
-    return response.content[0]?.text?.trim() || null;
+    return { text: response.content[0]?.text?.trim() || null, usage: response.usage };
   }
 
   /**
@@ -246,7 +271,7 @@ ${subjectSummary}${examNote}
       max_tokens: 280,
       messages: [{ role: 'user', content: prompt }],
     });
-    return response.content[0]?.text?.trim() || null;
+    return { text: response.content[0]?.text?.trim() || null, usage: response.usage };
   }
 
   /**
@@ -285,19 +310,26 @@ ${subjectSummary}${examNote}
       .join('、');
 
     try {
-      const jiaText = await this._analyzeGradeHabits(
+      const jia = await this._analyzeGradeHabits(
         grade, totalStudents, reportingCount, totalItems, activeDays, studentComparison, examDays
       );
-      if (!jiaText) return null;
+      if (!jia?.text) return null;
 
-      let yiText = null;
+      let yi = null;
       try {
-        yiText = await this._analyzeGradeSubjects(grade, subjectSummary, jiaText, examDays);
+        yi = await this._analyzeGradeSubjects(grade, subjectSummary, jia.text, examDays);
       } catch (e) {
         console.warn(`[AI乙年級] ${grade}年級 學科分析失敗：${e.message}`);
       }
 
-      return yiText ? `${jiaText}\n\n${yiText}` : jiaText;
+      const text = yi?.text ? `${jia.text}\n\n${yi.text}` : jia.text;
+
+      const inputTokens  = (jia.usage?.input_tokens  || 0) + (yi?.usage?.input_tokens  || 0);
+      const outputTokens = (jia.usage?.output_tokens || 0) + (yi?.usage?.output_tokens || 0);
+      const costInfo = this._formatCostInfo(inputTokens, outputTokens);
+      console.log(`[AI年級] ${grade}年級 ${costInfo}`);
+
+      return { text, inputTokens, outputTokens, costInfo };
     } catch (error) {
       const status = error.status || error.statusCode || (error.response?.status) || 'unknown';
       console.error(`[AI年級] ${grade}年級分析失敗 (HTTP ${status}):`, error.message);

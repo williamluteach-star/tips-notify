@@ -346,19 +346,21 @@ class NotificationService {
         }
 
         // 雙 AI 分析：附加甲（習慣）+ 乙（學科）年級觀察
+        let gradeCostInfo = '';
         try {
-          const aiGradeText = await aiService.analyzeGradeProgress(
+          const aiGradeResult = await aiService.analyzeGradeProgress(
             grade, gradeRecords, studentsInGrade, studentComparison, examDays
           );
-          if (aiGradeText) {
-            msg += `\n\n━━━━━━━━━━━━━━━━\n🤖 AI 老師年級觀察\n\n${aiGradeText}`;
+          if (aiGradeResult) {
+            msg += `\n\n━━━━━━━━━━━━━━━━\n🤖 AI 老師年級觀察\n\n${aiGradeResult.text}`;
+            gradeCostInfo = aiGradeResult.costInfo || '';
             console.log(`[年級週報] ✅ ${grade}年級 AI分析已附加`);
           }
         } catch (e) {
           console.warn(`[年級週報] ${grade}年級 AI分析失敗（略過）:`, e.message);
         }
 
-        await homeworkService.saveGradeReport({ period, grade, msgText: msg });
+        await homeworkService.saveGradeReport({ period, grade, msgText: msg, costInfo: gradeCostInfo });
         console.log(`[年級週報] ✅ ${grade}年級 已存入待審`);
         results.push({ grade, success: true });
       }
@@ -590,13 +592,14 @@ class NotificationService {
               return `  ${d}：${r.作業項目}`;
             }).join('\n')
           : '';
-        const aiText = await aiService.analyzeStudentProgress(studentName, weekRecords, leaveSummary);
-        if (!aiText) {
+        const aiResult = await aiService.analyzeStudentProgress(studentName, weekRecords, leaveSummary);
+        if (!aiResult) {
           console.warn(`[AI產生] ${studentName} AI 分析失敗`);
           results.push({ studentName, success: false });
           continue;
         }
-        await homeworkService.saveAIAnalysis({ period, studentName, aiText });
+        const { text: aiText, costInfo } = aiResult;
+        await homeworkService.saveAIAnalysis({ period, studentName, aiText, costInfo });
         console.log(`[AI產生] ✅ ${studentName} 已儲存`);
         results.push({ studentName, success: true });
       }

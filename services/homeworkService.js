@@ -639,61 +639,54 @@ class HomeworkService {
   async _ensureSheet(sheetTitle, headers) {
     if (!this.sheets) return;
     try {
-      // 嘗試讀取看是否存在
-      await this.sheets.spreadsheets.values.get({
-        spreadsheetId: this.spreadsheetId,
-        range: `${sheetTitle}!A1`,
-      });
-    } catch (e) {
-      if (e.message?.includes('Unable to parse range') || e.message?.includes('not found') || e.code === 400) {
-        // 工作表不存在，建立它
-        try {
-          await this.sheets.spreadsheets.batchUpdate({
-            spreadsheetId: this.spreadsheetId,
-            requestBody: { requests: [{ addSheet: { properties: { title: sheetTitle } } }] },
-          });
-          // 寫入表頭
-          await this.sheets.spreadsheets.values.update({
-            spreadsheetId: this.spreadsheetId,
-            range: `${sheetTitle}!A1:${String.fromCharCode(64 + headers.length)}1`,
-            valueInputOption: 'USER_ENTERED',
-            resource: { values: [headers] },
-          });
-          console.log(`[GSheets] 已自動建立工作表：${sheetTitle}`);
-        } catch (createErr) {
-          console.warn(`[GSheets] 建立工作表失敗 ${sheetTitle}:`, createErr.message);
-        }
+      // 用 spreadsheets.get 取得全部工作表清單，比嘗試讀取 range 更可靠
+      const meta = await this.sheets.spreadsheets.get({ spreadsheetId: this.spreadsheetId });
+      const exists = (meta.data.sheets || []).some(s => s.properties.title === sheetTitle);
+      if (!exists) {
+        await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: this.spreadsheetId,
+          requestBody: { requests: [{ addSheet: { properties: { title: sheetTitle } } }] },
+        });
+        await this.sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: `${sheetTitle}!A1:${String.fromCharCode(64 + headers.length)}1`,
+          valueInputOption: 'USER_ENTERED',
+          resource: { values: [headers] },
+        });
+        console.log(`[GSheets] 已自動建立工作表：${sheetTitle}`);
       }
+    } catch (e) {
+      console.warn(`[GSheets] _ensureSheet 失敗 ${sheetTitle}:`, e.message);
     }
   }
 
   /**
    * 儲存 AI 評語到「AI評語待審」工作表
-   * 欄位：A=週期, B=學生姓名, C=AI原始評語, D=最終評語, E=狀態, F=產生時間
+   * 欄位：A=週期, B=學生姓名, C=AI原始評語, D=最終評語, E=狀態, F=產生時間, G=Token費用
    */
-  async saveAIAnalysis({ period, studentName, aiText }) {
+  async saveAIAnalysis({ period, studentName, aiText, costInfo = '' }) {
     if (!this.sheets) await this.init();
     if (!this.sheets) return null;
-    await this._ensureSheet('AI評語待審', ['週期', '學生姓名', 'AI原始評語', '最終評語', '狀態', '產生時間']);
+    await this._ensureSheet('AI評語待審', ['週期', '學生姓名', 'AI原始評語', '最終評語', '狀態', '產生時間', 'Token費用']);
 
     const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
     try {
       // 先查是否已有同週期＋同學生的列（upsert，避免重複）
       const existing = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'AI評語待審!A2:F',
+        range: 'AI評語待審!A2:G',
       });
       const rows = existing.data.values || [];
       const rowIndex = rows.findIndex(r => r[0] === period && r[1] === studentName);
 
       if (rowIndex >= 0) {
-        // 已存在 → 更新 C（AI原始）、D（最終）、E（重設為待審）、F（時間）
+        // 已存在 → 更新 C～G
         const sheetRow = rowIndex + 2;
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
-          range: `AI評語待審!C${sheetRow}:F${sheetRow}`,
+          range: `AI評語待審!C${sheetRow}:G${sheetRow}`,
           valueInputOption: 'USER_ENTERED',
-          resource: { values: [[aiText, aiText, '待審', timestamp]] },
+          resource: { values: [[aiText, aiText, '待審', timestamp, costInfo]] },
         });
         console.log(`[GSheets] AI評語 upsert（更新）：${studentName} / ${period}`);
       } else {
@@ -703,35 +696,31 @@ class HomeworkService {
           range: 'AI評語待審!A2',
           valueInputOption: 'USER_ENTERED',
           insertDataOption: 'INSERT_ROWS',
-          resource: { values: [[period, studentName, aiText, aiText, '待審', timestamp]] },
+          resource: { values: [[period, studentName, aiText, aiText, '待審', timestamp, costInfo]] },
         });
         console.log(`[GSheets] AI評語 upsert（新增）：${studentName} / ${period}`);
       }
       return { period, studentName };
     } catch (error) {
-      if (error.message?.includes('Unable to parse range')) {
-        console.warn('[GSheets] 「AI評語待審」工作表不存在，請先手動新增。');
-      } else {
-        console.error('儲存 AI 評語錯誤:', error.message);
-      }
+      console.error('儲存 AI 評語錯誤:', error.message);
       return null;
     }
   }
 
   /**
    * 儲存年級週報到「年級週報待審」工作表（upsert）
-   * 欄位：A=週期, B=年級, C=報告文字, D=最終文字, E=狀態, F=產生時間
+   * 欄位：A=週期, B=年級, C=報告文字, D=最終文字, E=狀態, F=產生時間, G=Token費用
    */
-  async saveGradeReport({ period, grade, msgText }) {
+  async saveGradeReport({ period, grade, msgText, costInfo = '' }) {
     if (!this.sheets) await this.init();
     if (!this.sheets) return null;
-    await this._ensureSheet('年級週報待審', ['週期', '年級', '報告文字', '最終文字', '狀態', '產生時間']);
+    await this._ensureSheet('年級週報待審', ['週期', '年級', '報告文字', '最終文字', '狀態', '產生時間', 'Token費用']);
 
     const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
     try {
       const existing = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: '年級週報待審!A2:F',
+        range: '年級週報待審!A2:G',
       });
       const rows = existing.data.values || [];
       const rowIndex = rows.findIndex(r => r[0] === period && r[1] === grade);
@@ -740,9 +729,9 @@ class HomeworkService {
         const sheetRow = rowIndex + 2;
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
-          range: `年級週報待審!C${sheetRow}:F${sheetRow}`,
+          range: `年級週報待審!C${sheetRow}:G${sheetRow}`,
           valueInputOption: 'USER_ENTERED',
-          resource: { values: [[msgText, msgText, '待審', timestamp]] },
+          resource: { values: [[msgText, msgText, '待審', timestamp, costInfo]] },
         });
       } else {
         await this.sheets.spreadsheets.values.append({
@@ -750,16 +739,12 @@ class HomeworkService {
           range: '年級週報待審!A2',
           valueInputOption: 'USER_ENTERED',
           insertDataOption: 'INSERT_ROWS',
-          resource: { values: [[period, grade, msgText, msgText, '待審', timestamp]] },
+          resource: { values: [[period, grade, msgText, msgText, '待審', timestamp, costInfo]] },
         });
       }
       return { period, grade };
     } catch (error) {
-      if (error.message?.includes('Unable to parse range')) {
-        console.warn('[GSheets] 「年級週報待審」工作表不存在，請先手動新增。');
-      } else {
-        console.error('儲存年級週報錯誤:', error.message);
-      }
+      console.error('儲存年級週報錯誤:', error.message);
       return null;
     }
   }
