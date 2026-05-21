@@ -977,12 +977,15 @@ app.get('/api/trigger/grade-send-reports', async (req, res) => {
   }
 });
 // 【偵錯】讀取成績記錄原始 rows（不做任何處理，看合併儲存格實際值）
+// 可帶 ?range=A1:DK 自訂範圍
 app.get('/api/debug/scores-raw', async (req, res) => {
   try {
     if (!homeworkService.sheets) await homeworkService.init();
+    const range = req.query.range || '成績記錄!A1:DK';
+    const fullRange = range.includes('!') ? range : `成績記錄!${range}`;
     const response = await homeworkService.sheets.spreadsheets.values.get({
       spreadsheetId: homeworkService.spreadsheetId,
-      range: '成績記錄!A1:Z',
+      range: fullRange,
     });
     res.json({ success: true, rows: response.data.values || [] });
   } catch (e) {

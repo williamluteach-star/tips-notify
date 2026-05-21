@@ -922,41 +922,33 @@ class HomeworkService {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: '成績記錄!A1:Z',
+        range: '成績記錄!A1:DK',  // 讀到 DK 欄（含 AI 欄）
       });
       const rows = response.data.values || [];
       if (rows.length < 2) return '';
 
       // ── 判斷是單列 header 還是雙列 header ──
-      // 如果第二列第一欄是「學生姓名」，代表雙列格式
       const isTwoRowHeader = rows.length >= 3 && (rows[1][0] === '學生姓名' || rows[1][0] === '姓名');
 
-      let colLabels; // 每個欄位的完整標籤
-      let dataRows;  // 學生資料列
+      let colLabels;
+      let dataRows;
 
       if (isTwoRowHeader) {
-        // 第一列：考期（合併儲存格，fill forward）
         const periodRow = rows[0];
         let currentPeriod = '';
         const periods = periodRow.map(cell => {
           if (cell && cell.trim()) currentPeriod = cell.trim();
           return currentPeriod;
         });
-
-        // 第二列：科目
         const subjectRow = rows[1];
-
-        // 組合標籤：「113上 一次段考 國文」，A/B 欄（姓名/年級）直接用科目名
         colLabels = subjectRow.map((subj, i) => {
-          if (i <= 1) return subj || ''; // 姓名、年級欄
+          if (i <= 1) return subj || '';
           const period = periods[i] || '';
-          const subject = subj || '';
+          const subject = (subj || '').trim();
           return period && subject ? `${period} ${subject}` : (subject || period);
         });
-
         dataRows = rows.slice(2);
       } else {
-        // 單列 header 模式（原有行為）
         colLabels = rows[0];
         dataRows = rows.slice(1);
       }
@@ -965,15 +957,22 @@ class HomeworkService {
       const dataRow = dataRows.find(r => r[0] === studentName);
       if (!dataRow) return '';
 
-      // 把標籤與數值配對（跳過第一欄姓名，第二欄年級也跳過）
+      // 取得年級（B欄，index 1）
+      const grade = (dataRow[1] || '').trim();
+
+      // 7年級：只讀 BK~DH（index 62~111）；其他年級：讀 C 以後所有欄
       const skipCols = isTwoRowHeader ? 2 : 1;
+      const SKIP_SUFFIXES = ['班排', '校排', '班名', '校名', '平均'];
+
+      const rangeStart = grade === '7' ? 62 : skipCols;  // BK = index 62
+      const rangeEnd   = grade === '7' ? 112 : colLabels.length; // DI-1 = 112
+
       const pairs = colLabels
         .map((label, i) => {
-          if (i < skipCols) return null;
+          if (i < rangeStart || i >= rangeEnd) return null;
           const val = (dataRow[i] || '').trim();
-          // 跳過「平均」「班排」「校排」之類的統計欄
           if (!val) return null;
-          if (['班排', '校排', '班名', '校名'].includes(label.split(' ').pop())) return null;
+          if (SKIP_SUFFIXES.includes(label.split(' ').pop())) return null;
           return `  ${label}：${val}`;
         })
         .filter(Boolean);
@@ -1047,10 +1046,10 @@ class HomeworkService {
 
     const aiService = require('./aiService');
 
-    // 1. 讀取整張成績記錄表
+    // 1. 讀取整張成績記錄表（到 DK 欄）
     const response = await this.sheets.spreadsheets.values.get({
       spreadsheetId: this.spreadsheetId,
-      range: '成績記錄!A1:Z',
+      range: '成績記錄!A1:DK',
     });
     const rows = response.data.values || [];
     if (rows.length < 2) return { success: false, message: '成績記錄工作表沒有資料' };
@@ -1083,43 +1082,37 @@ class HomeworkService {
       colLabels = rows[0];
     }
 
-    // 4. 找出成績欄數（排除已有的 AI 欄）
-    const AI_HEADERS = ['AI原始評語1(甲)', 'AI原始評語2(乙)', 'Token費用'];
-    let scoreColCount = colLabels.length;
-    while (scoreColCount > 0 && AI_HEADERS.includes(colLabels[scoreColCount - 1])) scoreColCount--;
+    // 4. AI 欄固定位置：DI=112, DJ=113, DK=114（0-based index）
+    //    使用者已預先建立好這三欄標題，不需要再寫入標題
+    const jiaCol  = 'DI';
+    const yiCol   = 'DJ';
+    const costCol = 'DK';
 
-    const jiaCol  = colLetter(scoreColCount);
-    const yiCol   = colLetter(scoreColCount + 1);
-    const costCol = colLetter(scoreColCount + 2);
-
-    // 5. 寫入 AI 欄標題（雙列 header → 寫在第二列；單列 → 第一列）
-    const aiHeaderSheetRow = isTwoRowHeader ? 2 : 1;
-    await this.sheets.spreadsheets.values.update({
-      spreadsheetId: this.spreadsheetId,
-      range: `成績記錄!${jiaCol}${aiHeaderSheetRow}:${costCol}${aiHeaderSheetRow}`,
-      valueInputOption: 'USER_ENTERED',
-      resource: { values: [AI_HEADERS] },
-    });
-
-    // 6. 學生資料列
+    // 5. 學生資料列
     const dataRows = rows.slice(headerRowCount).filter(r => r[0] && r[0] !== '學生姓名');
-    const skipCols = isTwoRowHeader ? 2 : 1; // 跳過姓名（+年級）欄
+    const skipCols = isTwoRowHeader ? 2 : 1;
+    const SKIP_SUFFIXES = ['班排', '校排', '班名', '校名', '平均'];
 
-    // 7. 逐一分析
+    // 6. 逐一分析
     const results = [];
     for (let i = 0; i < dataRows.length; i++) {
-      const dataRow    = dataRows[i];
+      const dataRow     = dataRows[i];
       const studentName = dataRow[0];
-      const sheetRow   = i + headerRowCount + 1; // 1-based
+      const grade       = (dataRow[1] || '').trim();
+      const sheetRow    = i + headerRowCount + 1; // 1-based
+
+      // 7年級：只讀 BK~DH（index 62~111）；其他年級：從 C 欄（index 2）讀
+      const rangeStart = grade === '7' ? 62 : skipCols;
+      const rangeEnd   = grade === '7' ? 112 : 112; // DH = index 111, 但 slice end 用 112
 
       // 組成成績摘要
-      const pairs = colLabels.slice(0, scoreColCount)
+      const pairs = colLabels
         .map((label, idx) => {
-          if (idx < skipCols) return null;
+          if (idx < rangeStart || idx >= rangeEnd) return null;
           const val = (dataRow[idx] || '').trim();
           if (!val) return null;
           const lastWord = label.split(' ').pop();
-          if (['班排', '校排', '班名', '校名', '平均'].includes(lastWord)) return null;
+          if (SKIP_SUFFIXES.includes(lastWord)) return null;
           return `  ${label}：${val}`;
         })
         .filter(Boolean);
