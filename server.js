@@ -1061,50 +1061,6 @@ setInterval(async () => {
 console.log('✅ 排程已啟動：週四10:00、週六18:08（台灣時區，server-side）');
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ─── 一次性：修正作業記錄表時間戳記 UTC→台北 ───────────────────────────────
-app.post('/api/admin/fix-timestamps', async (req, res) => {
-  try {
-    const { google } = require('googleapis');
-    const moment = require('moment');
-    const homeworkService = require('./services/homeworkService');
-    if (!homeworkService.sheets) await homeworkService.init();
-    const sheets = homeworkService.sheets;
-    if (!sheets) return res.json({ success: false, message: 'Sheets 未初始化' });
-
-    const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
-    const readRes = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: '作業記錄表!A2:A',
-    });
-    const rows = readRes.data.values || [];
-    const updates = [];
-
-    rows.forEach((row, i) => {
-      const original = (row[0] || '').trim();
-      if (!original) return;
-      const parsed = moment.utc(original, ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss'], true);
-      if (!parsed.isValid()) return;
-      const fixed = parsed.utcOffset('+08:00').format('YYYY-MM-DD HH:mm:ss');
-      if (fixed === original) return;
-      updates.push({ range: `作業記錄表!A${i + 2}`, values: [[fixed]] });
-    });
-
-    if (updates.length === 0) {
-      return res.json({ success: true, message: '無需修正，時間戳記已正確', fixed: 0 });
-    }
-
-    await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId,
-      resource: { valueInputOption: 'USER_ENTERED', data: updates },
-    });
-
-    res.json({ success: true, message: `已修正 ${updates.length} 筆時間戳記（UTC→台北）`, fixed: updates.length });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-// ────────────────────────────────────────────────────────────────────────────
-
 // 啟動伺服器
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
