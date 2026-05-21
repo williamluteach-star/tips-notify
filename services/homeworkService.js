@@ -905,6 +905,57 @@ class HomeworkService {
   }
 }
 
+  /**
+   * 讀取「成績記錄」工作表中指定學生的月考成績
+   * 欄位：A=學生姓名, B=年級, C=國文, D=英文, E=數學, F=自然, G=社會, H=其他備注
+   * 各科欄位填入逗號分隔的歷次分數，例如：85,82,88,91,78
+   * @returns {string} 供 AI prompt 使用的成績摘要，找不到資料回傳空字串
+   */
+  async getStudentScores(studentName) {
+    if (!this.sheets) await this.init();
+    if (!this.sheets) return '';
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: '成績記錄!A2:H',
+      });
+      const rows = response.data.values || [];
+      const row = rows.find(r => r[0] === studentName);
+      if (!row) return '';
+
+      const subjects = [
+        { name: '國文', scores: row[2] },
+        { name: '英文', scores: row[3] },
+        { name: '數學', scores: row[4] },
+        { name: '自然', scores: row[5] },
+        { name: '社會', scores: row[6] },
+      ];
+
+      const lines = subjects
+        .filter(s => s.scores && s.scores.trim())
+        .map(s => {
+          const nums = s.scores.split(',').map(n => parseFloat(n.trim())).filter(n => !isNaN(n));
+          if (nums.length === 0) return null;
+          const avg = (nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(1);
+          const trend = nums.length >= 2
+            ? (nums[nums.length - 1] - nums[0] > 3 ? '↑上升' : nums[0] - nums[nums.length - 1] > 3 ? '↓下降' : '→平穩')
+            : '';
+          return `  ${s.name}：平均 ${avg} 分（${nums.length} 次）${trend ? ' ' + trend : ''}`;
+        })
+        .filter(Boolean);
+
+      if (lines.length === 0) return '';
+      const note = row[7] ? `\n  備注：${row[7]}` : '';
+      return `學科月考成績摘要（歷次平均）：\n${lines.join('\n')}${note}`;
+    } catch (error) {
+      if (!error.message?.includes('Unable to parse range')) {
+        console.warn('[GSheets] 讀取成績記錄失敗:', error.message);
+      }
+      return '';
+    }
+  }
+}
+
 module.exports = new HomeworkService();
 
 

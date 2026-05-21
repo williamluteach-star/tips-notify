@@ -54,7 +54,7 @@ class AIService {
   /**
    * 【Claude 甲】學習習慣觀察：本週模式 + 下週方向
    */
-  async _analyzeHabits(chineseName, activeDays, totalItems, recordSummary, examDays, leaveSummary = '') {
+  async _analyzeHabits(chineseName, activeDays, totalItems, recordSummary, examDays, leaveSummary = '', scoresSummary = '') {
     const examNote = examDays !== null
       ? `\n⚠️ 期末考備考提醒：距離期末考（各校約6/25～6/30）還有 ${examDays} 天，請在【下週建議】中加入備考複習的具體提醒。`
       : '';
@@ -64,17 +64,17 @@ class AIService {
 
     const prompt = `你是英典教育的AI學習顧問（習慣分析師）。請根據以下學生本週（週一至週五）的學習記錄，用繁體中文產出兩個段落：
 
-【本週觀察】2-3句，描述本週的學習狀況（哪幾天有記錄、各項目的內容份量與深度、學習節奏）。若有請假，請簡短提及。請根據項目內容評估學習的「量」，而非僅計算項目數量。
-【下週建議】1-2句，給出下週具體可行的學習方向，包含應繼續強化或需要調整的重點。
+【本週觀察】2-3句，描述本週的學習狀況（哪幾天有記錄、各科目的內容份量與深度、學習節奏）。若有請假，請簡短提及。請根據項目內容評估學習的「量」，而非僅計算項目數量。
+【下週建議】具體指出本週哪些科目投入份量較多、哪些科目相對較少，明確建議下週可以多花時間加強哪幾科（點名科目），以達到更平衡的學習狀態。若有成績資料，優先針對較弱的科目給出建議。
 
 格式要求：
 - 兩段以空行分隔，各段前保留「【本週觀察】」和「【下週建議】」標題
-- 總字數不超過150字
+- 總字數不超過180字
 - 語氣溫暖、專業，不要加稱呼，直接輸出內容${examNote}
 
 學生姓名：${chineseName}
 本週出現天數：${activeDays} 天（本週共5天）${leaveNote}
-學習記錄（週一～週五，請依各項目的內容份量評估學習量）：
+${scoresSummary ? scoresSummary + '\n' : ''}學習記錄（週一～週五，請依各項目的內容份量評估學習量）：
 ${recordSummary || '  本週無任何作業記錄'}`;
 
     const response = await this.client.messages.create({
@@ -142,7 +142,7 @@ ${recordSummary || '  本週無任何記錄'}
    * @param {Array}  weekRecords - 週一～週五記錄
    * @returns {string|null} 合併後的 AI 評語
    */
-  async analyzeStudentProgress(studentName, weekRecords, leaveSummary = '') {
+  async analyzeStudentProgress(studentName, weekRecords, leaveSummary = '', scoresSummary = '') {
     await this._initPromise;
     if (!this.client) return null;
 
@@ -170,7 +170,7 @@ ${recordSummary || '  本週無任何記錄'}
 
     try {
       // ── Claude 甲：習慣分析 ──
-      const jia = await this._analyzeHabits(chineseName, activeDays, totalItems, recordSummary, examDaysArg, leaveSummary);
+      const jia = await this._analyzeHabits(chineseName, activeDays, totalItems, recordSummary, examDaysArg, leaveSummary, scoresSummary);
       if (!jia?.text) {
         console.warn(`[AI甲] ${studentName} 習慣分析失敗`);
         return null;

@@ -610,7 +610,10 @@ class NotificationService {
               return `  ${d}：${r.作業項目}`;
             }).join('\n')
           : '';
-        const aiResult = await aiService.analyzeStudentProgress(studentName, weekRecords, leaveSummary);
+        // 讀取月考成績（若有「成績記錄」工作表）
+        const scoresSummary = await homeworkService.getStudentScores(studentName).catch(() => '');
+
+        const aiResult = await aiService.analyzeStudentProgress(studentName, weekRecords, leaveSummary, scoresSummary);
         if (!aiResult) {
           console.warn(`[AI產生] ${studentName} AI 分析失敗`);
           results.push({ studentName, success: false });
