@@ -976,6 +976,20 @@ app.get('/api/trigger/grade-send-reports', async (req, res) => {
     res.status(500).json({ success: false, error: e.message });
   }
 });
+// 【偵錯】讀取成績記錄原始 rows（不做任何處理，看合併儲存格實際值）
+app.get('/api/debug/scores-raw', async (req, res) => {
+  try {
+    if (!homeworkService.sheets) await homeworkService.init();
+    const response = await homeworkService.sheets.spreadsheets.values.get({
+      spreadsheetId: homeworkService.spreadsheetId,
+      range: '成績記錄!A1:Z',
+    });
+    res.json({ success: true, rows: response.data.values || [] });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // 【偵錯】讀取成績記錄工作表全部內容（含標題列）
 app.get('/api/debug/scores-preview', async (req, res) => {
   try {
