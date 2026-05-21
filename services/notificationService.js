@@ -209,9 +209,141 @@ class NotificationService {
   }
 
   /**
-   * 發送班級學習進度週報（每週日 11:58）
-   * 涵蓋整週（Mon-Sat），依年級分組發送給全年級已配對家長
-   * 學生姓名以中文遮蔽（張O菲）
+   * 【週六 18:02】產生年級學習進度週報並存到 Google Sheets「年級週報待審」
+   * 老師可在週日前審核/修改，確認後週日 11:59 發送
+   */
+  async generateAndSaveGradeReports(startDate, endDate) {
+    try {
+      const allStudents = await homeworkService.getAllStudents();
+      const records = await homeworkService.getHomeworkByDateRange(startDate, endDate);
+      const period = `${startDate}~${endDate}`;
+
+      if (records.length === 0) {
+        return { success: true, message: '此區間無學習記錄', generated: 0 };
+      }
+
+      const gradeMap = {};
+      allStudents.forEach(s => { if (s.grade) gradeMap[s.studentName] = String(s.grade); });
+
+      const grades = [...new Set(records.map(r => gradeMap[r.學生姓名]).filter(Boolean))].sort();
+      const startFmt = moment(startDate).format('MM/DD');
+      const endFmt   = moment(endDate).format('MM/DD');
+      const results  = [];
+
+      for (const grade of grades) {
+        const studentsInGrade = allStudents.filter(s => String(s.grade) === grade);
+        const gradeRecords = records.filter(r => gradeMap[r.學生姓名] === grade);
+
+        const byStudent = {};
+        gradeRecords.forEach(r => {
+          if (!byStudent[r.學生姓名]) byStudent[r.學生姓名] = [];
+          byStudent[r.學生姓名].push(r);
+        });
+
+        const studentLines = Object.entries(byStudent).map(([name, recs]) => {
+          const masked = maskChineseName(name);
+          const byDate = {};
+          recs.forEach(r => {
+            const d = moment(r.時間戳記, ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss']).format('MM/DD');
+            if (!byDate[d]) byDate[d] = [];
+            byDate[d].push(r.作業項目);
+          });
+          return `${masked}\n${Object.entries(byDate).map(([d, items]) => `  ${d}　${items.join('、')}`).join('\n')}`;
+        });
+
+        const reportStudentCount = Object.keys(byStudent).length;
+        const totalItems = gradeRecords.length;
+
+        let msg = `📊【${startFmt}～${endFmt} 年級學習進度週報】（${grade}年級）\n\n`;
+        msg += studentLines.join('\n\n');
+        msg += `\n\n────────────────\n`;
+        msg += `📈 本週共 ${reportStudentCount} 位同學回報進度，合計 ${totalItems} 項\n\n`;
+        msg += randomFrom(STUDENT_ENCOURAGEMENTS);
+        msg += `\n\n${randomFrom(PARENT_ENCOURAGEMENTS)}`;
+        msg += `\n\n${ATOMIC_POWER}`;
+
+        await homeworkService.saveGradeReport({ period, grade, msgText: msg });
+        console.log(`[年級週報] ✅ ${grade}年級 已存入待審`);
+        results.push({ grade, success: true });
+      }
+
+      return {
+        success: true,
+        message: `已產生 ${results.length} 個年級的週報`,
+        period,
+        results,
+      };
+    } catch (error) {
+      console.error('[年級週報產生] 錯誤:', error);
+      throw new Error(`產生年級週報失敗: ${error.message}`);
+    }
+  }
+
+  /**
+   * 【週日 11:59】從 Sheets 讀取已審核年級週報並發送給家長
+   */
+  async sendSavedGradeReports(startDate, endDate) {
+    if (!client) {
+      return { success: false, message: 'LINE Bot 未設定（預覽模式）' };
+    }
+    try {
+      const period = `${startDate}~${endDate}`;
+      const reports = await homeworkService.getGradeReports(period);
+
+      if (reports.length === 0) {
+        return { success: true, message: '無待發送的年級週報', sent: 0 };
+      }
+
+      const allStudents = await homeworkService.getAllStudents();
+      const allResults  = [];
+
+      for (const report of reports) {
+        if (report.status === '已發送') continue;
+        const { grade, finalText } = report;
+
+        const studentsInGrade = allStudents.filter(s => String(s.grade) === grade);
+        const allLineIds = new Set();
+        for (const student of studentsInGrade) {
+          const fromPairs = this.getParentLineUserIds(student.studentName);
+          if (fromPairs.length > 0) {
+            fromPairs.forEach(id => allLineIds.add(id));
+          } else if (student.lineUserId) {
+            student.lineUserId.split(',').map(s => s.trim()).filter(Boolean).forEach(id => allLineIds.add(id));
+          }
+        }
+
+        if (allLineIds.size === 0) {
+          console.warn(`[年級週報發送] ${grade}年級 無已配對家長`);
+          continue;
+        }
+
+        for (const uid of allLineIds) {
+          try {
+            await client.pushMessage(uid, { type: 'text', text: finalText });
+            allResults.push({ grade, userId: uid, success: true });
+          } catch (e) {
+            allResults.push({ grade, userId: uid, success: false, error: e.message });
+          }
+        }
+      }
+
+      await homeworkService.markGradeReportsSent(period);
+      const successCount = allResults.filter(r => r.success).length;
+      return {
+        success: true,
+        message: `年級週報發送完成：${successCount}/${allResults.length}`,
+        period,
+        results: allResults,
+      };
+    } catch (error) {
+      console.error('[年級週報發送] 錯誤:', error);
+      throw new Error(`發送年級週報失敗: ${error.message}`);
+    }
+  }
+
+  /**
+   * 發送年級學習進度週報（保留舊 API 相容性，內部轉發至新流程）
+   * @deprecated 請改用 generateAndSaveGradeReports + sendSavedGradeReports
    */
   async sendClassWeeklySummary(startDate, endDate) {
     if (!client) {
@@ -279,7 +411,7 @@ class NotificationService {
         const totalItems = gradeRecords.length;
 
         // 組合訊息
-        let msg = `📊【${startFmt}～${endFmt} 班級學習進度摘要】（${grade}年級）\n\n`;
+        let msg = `📊【${startFmt}～${endFmt} 年級學習進度週報】（${grade}年級）\n\n`;
         msg += studentLines.join('\n\n');
         msg += `\n\n────────────────\n`;
         msg += `📈 本週共 ${reportStudentCount} 位同學回報進度，合計 ${totalItems} 項\n\n`;

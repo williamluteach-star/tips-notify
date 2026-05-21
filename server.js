@@ -913,12 +913,13 @@ app.get('/api/trigger/class-weekly-summary', async (req, res) => {
 });
 
 // AI 分析產生：每週六產生本週一~六分析
+// AI 個人評語產生：週六 18:01，撈週一～週五記錄
 app.get('/api/trigger/ai-generate-analyses', async (req, res) => {
   try {
     const moment = require('moment');
     const now = moment().utcOffset('+08:00');
-    const startDate = now.clone().day(1).format('YYYY-MM-DD');
-    const endDate   = now.clone().day(6).format('YYYY-MM-DD');
+    const startDate = now.clone().day(1).format('YYYY-MM-DD'); // 週一
+    const endDate   = now.clone().day(5).format('YYYY-MM-DD'); // 週五（改！）
     console.log(`[trigger/ai-generate-analyses] 產生 ${startDate} ~ ${endDate}`);
     const result = await notificationService.generateAndSaveAIAnalyses(startDate, endDate);
     res.json(result);
@@ -928,18 +929,50 @@ app.get('/api/trigger/ai-generate-analyses', async (req, res) => {
   }
 });
 
-// AI 週報發送：每週日發送本週一~六 AI 評語
+// 年級週報產生：週六 18:02，存到 Sheets 待審
+app.get('/api/trigger/grade-generate-reports', async (req, res) => {
+  try {
+    const moment = require('moment');
+    const now = moment().utcOffset('+08:00');
+    const startDate = now.clone().day(1).format('YYYY-MM-DD'); // 週一
+    const endDate   = now.clone().day(5).format('YYYY-MM-DD'); // 週五
+    console.log(`[trigger/grade-generate-reports] 產生 ${startDate} ~ ${endDate}`);
+    const result = await notificationService.generateAndSaveGradeReports(startDate, endDate);
+    res.json(result);
+  } catch (e) {
+    console.error('[trigger/grade-generate-reports]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// AI 個人評語發送：週日 11:58
 app.get('/api/trigger/ai-weekly-analysis', async (req, res) => {
   try {
     const moment = require('moment');
     const now = moment().utcOffset('+08:00');
     const startDate = now.clone().day(1).format('YYYY-MM-DD');
-    const endDate   = now.clone().day(6).format('YYYY-MM-DD');
+    const endDate   = now.clone().day(5).format('YYYY-MM-DD'); // 週五
     console.log(`[trigger/ai-weekly-analysis] 發送 ${startDate} ~ ${endDate}`);
     const result = await notificationService.sendAIWeeklyAnalysis(startDate, endDate);
     res.json(result);
   } catch (e) {
     console.error('[trigger/ai-weekly-analysis]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// 年級週報發送：週日 11:59
+app.get('/api/trigger/grade-send-reports', async (req, res) => {
+  try {
+    const moment = require('moment');
+    const now = moment().utcOffset('+08:00');
+    const startDate = now.clone().day(1).format('YYYY-MM-DD');
+    const endDate   = now.clone().day(5).format('YYYY-MM-DD'); // 週五
+    console.log(`[trigger/grade-send-reports] 發送 ${startDate} ~ ${endDate}`);
+    const result = await notificationService.sendSavedGradeReports(startDate, endDate);
+    res.json(result);
+  } catch (e) {
+    console.error('[trigger/grade-send-reports]', e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
