@@ -383,33 +383,31 @@ app.post('/api/class-weekly-summary', async (req, res) => {
 
 // API: 測試 Anthropic API 連線（診斷用）
 app.get('/api/ai-test', async (req, res) => {
-  // 診斷：列出所有 env key 名稱（不含值）
-  const allKeys = Object.keys(process.env).sort();
-  const anthropicKeys = allKeys.filter(k => k.toUpperCase().includes('ANTHROPIC'));
-  const keyValue = process.env.ANTHROPIC_API_KEY || process.env.ANT_API_KEY;
-  const keyInfo = keyValue
-    ? { present: true, length: keyValue.length, prefix: keyValue.substring(0, 15), hasQuotes: keyValue.startsWith('"') || keyValue.startsWith("'"), source: process.env.ANTHROPIC_API_KEY ? 'ANTHROPIC_API_KEY' : 'ANT_API_KEY' }
-    : { present: false };
+  // 診斷：測試 aiService（包含 Google Sheets fallback）
+  const aiService = require('./services/aiService');
+  const commitSha = process.env.RAILWAY_GIT_COMMIT_SHA?.substring(0, 7) || 'local';
 
   try {
-    const Anthropic = require('@anthropic-ai/sdk');
-    if (!keyValue) {
+    // Wait for async init (Google Sheets key loading)
+    await aiService._initPromise;
+    const clientReady = !!aiService.client;
+
+    if (!clientReady) {
       return res.json({
         success: false,
-        error: 'ANTHROPIC_API_KEY 未設定',
-        keyInfo,
-        anthropicRelatedKeys: anthropicKeys,
-        totalEnvKeys: allKeys.length,
-        allEnvKeys: allKeys,
+        error: 'AI client 未初始化（env var 和 Google Sheets 都找不到 key）',
+        commit: commitSha,
+        envKeyPresent: !!process.env.ANTHROPIC_API_KEY,
       });
     }
-    const client = new Anthropic({ apiKey: keyValue });
-    const response = await client.messages.create({
+
+    // Fire a real test call
+    const response = await aiService.client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 50,
       messages: [{ role: 'user', content: 'Say "OK" in one word.' }],
     });
-    res.json({ success: true, reply: response.content[0]?.text, keyInfo });
+    res.json({ success: true, reply: response.content[0]?.text, commit: commitSha, clientReady });
   } catch (error) {
     const status = error.status || error.statusCode || 'unknown';
     res.json({
