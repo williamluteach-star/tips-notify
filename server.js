@@ -976,6 +976,20 @@ app.get('/api/trigger/grade-send-reports', async (req, res) => {
     res.status(500).json({ success: false, error: e.message });
   }
 });
+// 學期升級 GET trigger（排程任務用）
+app.get('/api/trigger/increment-grade', async (req, res) => {
+  try {
+    const result = await homeworkService.incrementGrades();
+    const msg = `年級升級完成：共更新 ${result.updated} 位學生` +
+      (result.graduated && result.graduated.length ? `，其中 ${result.graduated.join('、')} 已畢業` : '') +
+      (result.skipped && result.skipped.length ? `；${result.skipped.length} 位非數字年級已跳過` : '');
+    res.json({ success: true, message: msg, result });
+  } catch (e) {
+    console.error('[trigger/increment-grade]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // 【偵錯】讀取成績記錄原始 rows（不做任何處理，看合併儲存格實際值）
 // 可帶 ?range=A1:DK 自訂範圍
 app.get('/api/debug/scores-raw', async (req, res) => {
