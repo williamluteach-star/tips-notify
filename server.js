@@ -233,7 +233,7 @@ app.post('/api/homework', async (req, res) => {
       record = await homeworkService.recordHomework({
         studentName,
         homeworkItem,
-        completedTime: completedTime || new Date().toISOString(),
+        completedTime: completedTime || null,
         operator: operator || '系統',
         photoUrl: photoUrl || '',
       });
@@ -289,7 +289,7 @@ app.post('/api/homework/batch', async (req, res) => {
         const result = await homeworkService.recordHomework({
           studentName: record.studentName,
           homeworkItem: record.homeworkItem,
-          completedTime: record.completedTime || new Date().toISOString(),
+          completedTime: record.completedTime || null,
           operator: record.operator || '系統',
         });
 

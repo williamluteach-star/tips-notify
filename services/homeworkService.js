@@ -50,8 +50,12 @@ class HomeworkService {
     }
 
     const timestamp = moment().utcOffset('+08:00').format('YYYY-MM-DD HH:mm:ss');
+    // 若 completedTime 含時區資訊（有 Z 或 +/-HH:mm），先轉成台灣時間再格式化
+    // 若不含時區（前端 datetime-local 直接送來的台灣本地時間），直接格式化，不做時區轉換
     const completedTimeFormatted = completedTime
-      ? moment(completedTime).utcOffset('+08:00').format('YYYY-MM-DD HH:mm')
+      ? (completedTime.includes('Z') || /[+-]\d{2}:?\d{2}$/.test(completedTime)
+          ? moment(completedTime).utcOffset('+08:00').format('YYYY-MM-DD HH:mm')
+          : moment(completedTime).format('YYYY-MM-DD HH:mm'))
       : moment().utcOffset('+08:00').format('YYYY-MM-DD HH:mm');
 
     const values = [[timestamp, studentName, homeworkItem, completedTimeFormatted, operator, '待通知', '', photoUrl]];
