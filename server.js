@@ -877,15 +877,20 @@ app.get('/api/trigger/weekly-summary', async (req, res) => {
     const moment = require('moment');
     const now = moment().utcOffset('+08:00');
     const dow = now.day();
+    // 支援 ?period=thu 或 ?period=sat 讓補跑時也能正確計算，
+    // 不帶參數則依今天星期自動判斷
+    const period = req.query.period;
     let startDate, endDate;
-    if (dow === 4) {
+    const isThu = period === 'thu' || (!period && dow === 4);
+    const isSat = period === 'sat' || (!period && dow === 6);
+    if (isThu) {
       startDate = now.clone().day(1).format('YYYY-MM-DD');
       endDate   = now.clone().day(3).format('YYYY-MM-DD');
-    } else if (dow === 6) {
+    } else if (isSat) {
       startDate = now.clone().day(4).format('YYYY-MM-DD');
       endDate   = now.clone().day(6).format('YYYY-MM-DD');
     } else {
-      return res.status(400).json({ error: `今天是週${['日','一','二','三','四','五','六'][dow]}，不在發送日（週四/週六）` });
+      return res.status(400).json({ error: `今天是週${['日','一','二','三','四','五','六'][dow]}，請帶 ?period=thu 或 ?period=sat 參數` });
     }
     console.log(`[trigger/weekly-summary] 發送 ${startDate} ~ ${endDate}`);
     const result = await notificationService.sendWeeklySummary(startDate, endDate);
