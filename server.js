@@ -944,10 +944,6 @@ app.get('/api/trigger/grade-generate-reports', async (req, res) => {
   notificationService.generateAndSaveGradeReports(startDate, endDate)
     .then(r => console.log(`[trigger/grade-generate-reports] 完成：`, JSON.stringify(r)))
     .catch(e => console.error(`[trigger/grade-generate-reports] 錯誤：`, e.message));
-  } catch (e) {
-    console.error('[trigger/grade-generate-reports]', e.message);
-    res.status(500).json({ success: false, error: e.message });
-  }
 });
 
 // AI 個人評語發送：週日 11:58
