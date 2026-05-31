@@ -923,8 +923,8 @@ app.get('/api/trigger/class-weekly-summary', async (req, res) => {
 app.get('/api/trigger/ai-generate-analyses', async (req, res) => {
   const moment = require('moment');
   const now = moment().utcOffset('+08:00');
-  const startDate = now.clone().day(1).format('YYYY-MM-DD'); // 週一
-  const endDate   = now.clone().day(5).format('YYYY-MM-DD'); // 週五
+  const startDate = req.query.startDate || now.clone().day(1).format('YYYY-MM-DD');
+  const endDate   = req.query.endDate   || now.clone().day(5).format('YYYY-MM-DD');
   console.log(`[trigger/ai-generate-analyses] 開始產生 ${startDate} ~ ${endDate}`);
   res.json({ success: true, message: '分析已啟動（背景執行中）', startDate, endDate });
   // 背景非同步執行，不阻塞 response
@@ -934,11 +934,13 @@ app.get('/api/trigger/ai-generate-analyses', async (req, res) => {
 });
 
 // 年級週報產生：週六 18:02，存到 Sheets 待審（立刻回應，背景執行）
+// 支援 ?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD 手動指定區間
 app.get('/api/trigger/grade-generate-reports', async (req, res) => {
   const moment = require('moment');
   const now = moment().utcOffset('+08:00');
-  const startDate = now.clone().day(1).format('YYYY-MM-DD'); // 週一
-  const endDate   = now.clone().day(5).format('YYYY-MM-DD'); // 週五
+  // 週六跑時 day(1)=本週一、day(5)=本週五；支援手動帶入避免週日跳週的問題
+  const startDate = req.query.startDate || now.clone().day(1).format('YYYY-MM-DD');
+  const endDate   = req.query.endDate   || now.clone().day(5).format('YYYY-MM-DD');
   console.log(`[trigger/grade-generate-reports] 開始產生 ${startDate} ~ ${endDate}`);
   res.json({ success: true, message: '年級週報已啟動（背景執行中）', startDate, endDate });
   notificationService.generateAndSaveGradeReports(startDate, endDate)
