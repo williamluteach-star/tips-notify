@@ -901,13 +901,13 @@ app.get('/api/trigger/weekly-summary', async (req, res) => {
   }
 });
 
-// 班級週報：每週日送本週一~六
+// 班級週報：每週日送本週一~六（isoWeekday 確保週日也能正確抓本週）
 app.get('/api/trigger/class-weekly-summary', async (req, res) => {
   try {
     const moment = require('moment');
     const now = moment().utcOffset('+08:00');
-    const startDate = now.clone().day(1).format('YYYY-MM-DD');
-    const endDate   = now.clone().day(6).format('YYYY-MM-DD');
+    const startDate = now.clone().isoWeekday(1).format('YYYY-MM-DD');
+    const endDate   = now.clone().isoWeekday(6).format('YYYY-MM-DD');
     console.log(`[trigger/class-weekly-summary] 發送 ${startDate} ~ ${endDate}`);
     const result = await notificationService.sendClassWeeklySummary(startDate, endDate);
     res.json(result);
@@ -923,8 +923,8 @@ app.get('/api/trigger/class-weekly-summary', async (req, res) => {
 app.get('/api/trigger/ai-generate-analyses', async (req, res) => {
   const moment = require('moment');
   const now = moment().utcOffset('+08:00');
-  const startDate = req.query.startDate || now.clone().day(1).format('YYYY-MM-DD');
-  const endDate   = req.query.endDate   || now.clone().day(5).format('YYYY-MM-DD');
+  const startDate = req.query.startDate || now.clone().isoWeekday(1).format('YYYY-MM-DD');
+  const endDate   = req.query.endDate   || now.clone().isoWeekday(5).format('YYYY-MM-DD');
   console.log(`[trigger/ai-generate-analyses] 開始產生 ${startDate} ~ ${endDate}`);
   res.json({ success: true, message: '分析已啟動（背景執行中）', startDate, endDate });
   // 背景非同步執行，不阻塞 response
@@ -939,8 +939,8 @@ app.get('/api/trigger/grade-generate-reports', async (req, res) => {
   const moment = require('moment');
   const now = moment().utcOffset('+08:00');
   // 週六跑時 day(1)=本週一、day(5)=本週五；支援手動帶入避免週日跳週的問題
-  const startDate = req.query.startDate || now.clone().day(1).format('YYYY-MM-DD');
-  const endDate   = req.query.endDate   || now.clone().day(5).format('YYYY-MM-DD');
+  const startDate = req.query.startDate || now.clone().isoWeekday(1).format('YYYY-MM-DD');
+  const endDate   = req.query.endDate   || now.clone().isoWeekday(5).format('YYYY-MM-DD');
   console.log(`[trigger/grade-generate-reports] 開始產生 ${startDate} ~ ${endDate}`);
   res.json({ success: true, message: '年級週報已啟動（背景執行中）', startDate, endDate });
   notificationService.generateAndSaveGradeReports(startDate, endDate)
@@ -948,13 +948,13 @@ app.get('/api/trigger/grade-generate-reports', async (req, res) => {
     .catch(e => console.error(`[trigger/grade-generate-reports] 錯誤：`, e.message));
 });
 
-// AI 個人評語發送：週日 11:58
+// AI 個人評語發送：週日 11:59（isoWeekday 確保週日也能正確抓本週）
 app.get('/api/trigger/ai-weekly-analysis', async (req, res) => {
   try {
     const moment = require('moment');
     const now = moment().utcOffset('+08:00');
-    const startDate = now.clone().day(1).format('YYYY-MM-DD');
-    const endDate   = now.clone().day(5).format('YYYY-MM-DD'); // 週五
+    const startDate = now.clone().isoWeekday(1).format('YYYY-MM-DD');
+    const endDate   = now.clone().isoWeekday(5).format('YYYY-MM-DD');
     console.log(`[trigger/ai-weekly-analysis] 發送 ${startDate} ~ ${endDate}`);
     const result = await notificationService.sendAIWeeklyAnalysis(startDate, endDate);
     res.json(result);
@@ -964,13 +964,13 @@ app.get('/api/trigger/ai-weekly-analysis', async (req, res) => {
   }
 });
 
-// 年級週報發送：週日 11:59
+// 年級週報發送：週日 12:00（isoWeekday 確保週日也能正確抓本週）
 app.get('/api/trigger/grade-send-reports', async (req, res) => {
   try {
     const moment = require('moment');
     const now = moment().utcOffset('+08:00');
-    const startDate = now.clone().day(1).format('YYYY-MM-DD');
-    const endDate   = now.clone().day(5).format('YYYY-MM-DD'); // 週五
+    const startDate = now.clone().isoWeekday(1).format('YYYY-MM-DD');
+    const endDate   = now.clone().isoWeekday(5).format('YYYY-MM-DD');
     console.log(`[trigger/grade-send-reports] 發送 ${startDate} ~ ${endDate}`);
     const result = await notificationService.sendSavedGradeReports(startDate, endDate);
     res.json(result);
