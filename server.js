@@ -919,31 +919,31 @@ app.get('/api/trigger/class-weekly-summary', async (req, res) => {
 
 // AI 分析產生：每週六產生本週一~六分析
 // AI 個人評語產生：週六 18:01，撈週一～週五記錄
+// 立刻回應 202，背景非同步執行（避免 cron-job.org 30 秒 timeout）
 app.get('/api/trigger/ai-generate-analyses', async (req, res) => {
-  try {
-    const moment = require('moment');
-    const now = moment().utcOffset('+08:00');
-    const startDate = now.clone().day(1).format('YYYY-MM-DD'); // 週一
-    const endDate   = now.clone().day(5).format('YYYY-MM-DD'); // 週五（改！）
-    console.log(`[trigger/ai-generate-analyses] 產生 ${startDate} ~ ${endDate}`);
-    const result = await notificationService.generateAndSaveAIAnalyses(startDate, endDate);
-    res.json(result);
-  } catch (e) {
-    console.error('[trigger/ai-generate-analyses]', e.message);
-    res.status(500).json({ success: false, error: e.message });
-  }
+  const moment = require('moment');
+  const now = moment().utcOffset('+08:00');
+  const startDate = now.clone().day(1).format('YYYY-MM-DD'); // 週一
+  const endDate   = now.clone().day(5).format('YYYY-MM-DD'); // 週五
+  console.log(`[trigger/ai-generate-analyses] 開始產生 ${startDate} ~ ${endDate}`);
+  res.json({ success: true, message: '分析已啟動（背景執行中）', startDate, endDate });
+  // 背景非同步執行，不阻塞 response
+  notificationService.generateAndSaveAIAnalyses(startDate, endDate)
+    .then(r => console.log(`[trigger/ai-generate-analyses] 完成：`, JSON.stringify(r)))
+    .catch(e => console.error(`[trigger/ai-generate-analyses] 錯誤：`, e.message));
 });
 
-// 年級週報產生：週六 18:02，存到 Sheets 待審
+// 年級週報產生：週六 18:02，存到 Sheets 待審（立刻回應，背景執行）
 app.get('/api/trigger/grade-generate-reports', async (req, res) => {
-  try {
-    const moment = require('moment');
-    const now = moment().utcOffset('+08:00');
-    const startDate = now.clone().day(1).format('YYYY-MM-DD'); // 週一
-    const endDate   = now.clone().day(5).format('YYYY-MM-DD'); // 週五
-    console.log(`[trigger/grade-generate-reports] 產生 ${startDate} ~ ${endDate}`);
-    const result = await notificationService.generateAndSaveGradeReports(startDate, endDate);
-    res.json(result);
+  const moment = require('moment');
+  const now = moment().utcOffset('+08:00');
+  const startDate = now.clone().day(1).format('YYYY-MM-DD'); // 週一
+  const endDate   = now.clone().day(5).format('YYYY-MM-DD'); // 週五
+  console.log(`[trigger/grade-generate-reports] 開始產生 ${startDate} ~ ${endDate}`);
+  res.json({ success: true, message: '年級週報已啟動（背景執行中）', startDate, endDate });
+  notificationService.generateAndSaveGradeReports(startDate, endDate)
+    .then(r => console.log(`[trigger/grade-generate-reports] 完成：`, JSON.stringify(r)))
+    .catch(e => console.error(`[trigger/grade-generate-reports] 錯誤：`, e.message));
   } catch (e) {
     console.error('[trigger/grade-generate-reports]', e.message);
     res.status(500).json({ success: false, error: e.message });
