@@ -291,12 +291,19 @@ class NotificationService {
       // 不納入年級週報的學生（無每日記錄者）
       const GRADE_REPORT_EXCLUDE = ['張宇婷', '張恆軒', '董洧彤'];
 
-      // 年級週報：7~8月停辦，9月起加入9年級，其餘月份只產出 7、8 年級
+      // 年級週報月份邏輯：
+      // 7~8月：只發 9 年級
+      // 9月起：7、8、9 年級全發
+      // 其餘月份：只發 7、8 年級
       const currentMonth = moment().utcOffset('+08:00').month() + 1; // 1~12
+      let TARGET_GRADES;
       if (currentMonth === 7 || currentMonth === 8) {
-        return { success: true, message: '7~8月暫停年級週報', generated: 0 };
+        TARGET_GRADES = ['9'];
+      } else if (currentMonth >= 9) {
+        TARGET_GRADES = ['7', '8', '9'];
+      } else {
+        TARGET_GRADES = ['7', '8'];
       }
-      const TARGET_GRADES = currentMonth >= 9 ? ['7', '8', '9'] : ['7', '8'];
       const grades = [...new Set(records.map(r => gradeMap[r.學生姓名]).filter(g => g && TARGET_GRADES.includes(g)))].sort();
       const startFmt = moment(startDate).format('MM/DD');
       const endFmt   = moment(endDate).format('MM/DD');
