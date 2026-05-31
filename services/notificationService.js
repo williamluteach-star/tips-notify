@@ -75,6 +75,19 @@ function randomFrom(arr) {
 }
 
 /**
+ * 根據當前月份決定哪些年級要發送訊息：
+ * 7~8月：只有 9 年級
+ * 9月起：7、8、9 年級
+ * 其餘月份：7、8 年級
+ */
+function getActiveGrades() {
+  const month = moment().utcOffset('+08:00').month() + 1; // 1~12
+  if (month === 7 || month === 8) return ['9'];
+  if (month >= 9) return ['7', '8', '9'];
+  return ['7', '8'];
+}
+
+/**
  * 判斷作業項目是否為請假記錄，並返回假別
  * "病假" → "病假"、"事假" → "事假"、其他 → null
  */
@@ -192,10 +205,17 @@ class NotificationService {
     }
 
     try {
-      const records = await homeworkService.getHomeworkByDateRange(startDate, endDate);
+      const activeGrades = getActiveGrades();
+      const allStudents = await homeworkService.getAllStudents();
+      const gradeMap = {};
+      allStudents.forEach(s => { if (s.grade) gradeMap[s.studentName] = String(s.grade); });
+
+      const allRecords = await homeworkService.getHomeworkByDateRange(startDate, endDate);
+      // 只保留本月應發送年級的學生記錄
+      const records = allRecords.filter(r => activeGrades.includes(gradeMap[r.學生姓名]));
 
       if (records.length === 0) {
-        console.log(`[週摘要] ${startDate} ~ ${endDate} 無學習記錄`);
+        console.log(`[週摘要] ${startDate} ~ ${endDate} 無學習記錄（本月有效年級：${activeGrades.join('、')}）`);
         return { success: true, message: '此區間無學習記錄', sent: 0 };
       }
 
@@ -291,19 +311,8 @@ class NotificationService {
       // 不納入年級週報的學生（無每日記錄者）
       const GRADE_REPORT_EXCLUDE = ['張宇婷', '張恆軒', '董洧彤'];
 
-      // 年級週報月份邏輯：
-      // 7~8月：只發 9 年級
-      // 9月起：7、8、9 年級全發
-      // 其餘月份：只發 7、8 年級
-      const currentMonth = moment().utcOffset('+08:00').month() + 1; // 1~12
-      let TARGET_GRADES;
-      if (currentMonth === 7 || currentMonth === 8) {
-        TARGET_GRADES = ['9'];
-      } else if (currentMonth >= 9) {
-        TARGET_GRADES = ['7', '8', '9'];
-      } else {
-        TARGET_GRADES = ['7', '8'];
-      }
+      // 年級週報依月份決定年級（統一使用 getActiveGrades）
+      const TARGET_GRADES = getActiveGrades();
       const grades = [...new Set(records.map(r => gradeMap[r.學生姓名]).filter(g => g && TARGET_GRADES.includes(g)))].sort();
       const startFmt = moment(startDate).format('MM/DD');
       const endFmt   = moment(endDate).format('MM/DD');
@@ -497,11 +506,12 @@ class NotificationService {
         if (s.grade) gradeMap[s.studentName] = String(s.grade);
       });
 
-      // 取得所有出現在記錄中的年級
+      // 只保留本月應發送的年級
+      const activeGrades = getActiveGrades();
       const grades = [...new Set(
         records
           .map(r => gradeMap[r.學生姓名])
-          .filter(Boolean)
+          .filter(g => g && activeGrades.includes(g))
       )].sort();
 
       const startFmt = moment(startDate).format('MM/DD');
@@ -598,11 +608,18 @@ class NotificationService {
    */
   async generateAndSaveAIAnalyses(startDate, endDate) {
     try {
-      const records = await homeworkService.getHomeworkByDateRange(startDate, endDate);
+      const activeGrades = getActiveGrades();
+      const allStudents = await homeworkService.getAllStudents();
+      const gradeMap = {};
+      allStudents.forEach(s => { if (s.grade) gradeMap[s.studentName] = String(s.grade); });
+
+      const allRecords = await homeworkService.getHomeworkByDateRange(startDate, endDate);
+      // 只保留本月應發送年級的學生記錄
+      const records = allRecords.filter(r => activeGrades.includes(gradeMap[r.學生姓名]));
       const period = `${startDate}~${endDate}`;
 
       if (records.length === 0) {
-        console.log(`[AI產生] ${period} 無學習記錄`);
+        console.log(`[AI產生] ${period} 無學習記錄（本月有效年級：${activeGrades.join('、')}）`);
         return { success: true, message: '此區間無學習記錄', generated: 0 };
       }
 
@@ -661,11 +678,18 @@ class NotificationService {
     }
 
     try {
+      const activeGrades = getActiveGrades();
+      const allStudents = await homeworkService.getAllStudents();
+      const gradeMap = {};
+      allStudents.forEach(s => { if (s.grade) gradeMap[s.studentName] = String(s.grade); });
+
       const period = `${startDate}~${endDate}`;
-      const analyses = await homeworkService.getAIAnalyses(period);
+      const allAnalyses = await homeworkService.getAIAnalyses(period);
+      // 只發送本月應發送年級的學生
+      const analyses = allAnalyses.filter(a => activeGrades.includes(gradeMap[a.studentName]));
 
       if (analyses.length === 0) {
-        console.log(`[AI發送] ${period} 無待審 AI 評語`);
+        console.log(`[AI發送] ${period} 無待審 AI 評語（本月有效年級：${activeGrades.join('、')}）`);
         return { success: true, message: '無待發送的 AI 評語', sent: 0 };
       }
 
