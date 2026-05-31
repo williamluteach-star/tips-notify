@@ -288,8 +288,9 @@ class NotificationService {
       const gradeMap = {};
       allStudents.forEach(s => { if (s.grade) gradeMap[s.studentName] = String(s.grade); });
 
-      // 年級週報只產出 7~9 年級
-      const TARGET_GRADES = ['7', '8', '9'];
+      // 年級週報：9月起才加入9年級，之前只產出 7、8 年級
+      const currentMonth = moment().utcOffset('+08:00').month() + 1; // 1~12
+      const TARGET_GRADES = currentMonth >= 9 ? ['7', '8', '9'] : ['7', '8'];
       const grades = [...new Set(records.map(r => gradeMap[r.學生姓名]).filter(g => g && TARGET_GRADES.includes(g)))].sort();
       const startFmt = moment(startDate).format('MM/DD');
       const endFmt   = moment(endDate).format('MM/DD');
