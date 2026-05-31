@@ -288,8 +288,11 @@ class NotificationService {
       const gradeMap = {};
       allStudents.forEach(s => { if (s.grade) gradeMap[s.studentName] = String(s.grade); });
 
-      // 年級週報：9月起才加入9年級，之前只產出 7、8 年級
+      // 年級週報：7~8月停辦，9月起加入9年級，其餘月份只產出 7、8 年級
       const currentMonth = moment().utcOffset('+08:00').month() + 1; // 1~12
+      if (currentMonth === 7 || currentMonth === 8) {
+        return { success: true, message: '7~8月暫停年級週報', generated: 0 };
+      }
       const TARGET_GRADES = currentMonth >= 9 ? ['7', '8', '9'] : ['7', '8'];
       const grades = [...new Set(records.map(r => gradeMap[r.學生姓名]).filter(g => g && TARGET_GRADES.includes(g)))].sort();
       const startFmt = moment(startDate).format('MM/DD');
