@@ -112,6 +112,9 @@ function extractGivenName(fullName) {
   return en ? `${givenCn} ${en}` : givenCn;
 }
 
+// 負責人通知：產出完成後透過 LINE 提醒陸宗呈 Derek 的家長
+const OWNER_STUDENT_NAME = '陸宗呈 Derek';
+
 /**
  * 計算距離期末考還有幾天（期末考約 6/25～6/30，各校不同）
  * 超過 30 天返回 null（不需要提醒）
@@ -128,6 +131,27 @@ class NotificationService {
   /**
    * 從 parent-pairs.json 取得某學生所有配對的家長 LINE ID
    */
+  /**
+   * 透過 LINE 通知負責人（陸宗呈 Derek 的家長）
+   */
+  async notifyOwner(message) {
+    if (!client) return;
+    try {
+      let lineIds = this.getParentLineUserIds(OWNER_STUDENT_NAME);
+      if (!lineIds.length) {
+        const fallback = await homeworkService.getParentLineUserId(OWNER_STUDENT_NAME);
+        if (fallback) lineIds = fallback.split(',').map(s => s.trim()).filter(Boolean);
+      }
+      for (const uid of lineIds) {
+        await client.pushMessage(uid, { type: 'text', text: message }).catch(e =>
+          console.warn('[notifyOwner] 發送失敗:', e.message)
+        );
+      }
+    } catch (e) {
+      console.warn('[notifyOwner] 錯誤:', e.message);
+    }
+  }
+
   getParentLineUserIds(studentName) {
     const pairsFile = path.join(__dirname, '..', 'parent-pairs.json');
     try {
@@ -404,6 +428,8 @@ class NotificationService {
         results.push({ grade, success: true });
       }
 
+      const gradeList = results.map(r => r.grade).join('、');
+      await this.notifyOwner(`✅ 年級週報已產生完成（${gradeList} 年級）\n請前往「年級週報待審」工作表審核，確認後將狀態改為「通過」，週日 12:00 系統會自動發送給家長。`);
       return {
         success: true,
         message: `已產生 ${results.length} 個年級的週報`,
@@ -657,6 +683,7 @@ class NotificationService {
       }
 
       const successCount = results.filter(r => r.success).length;
+      await this.notifyOwner(`✅ AI 個人評語已產生完成（${successCount}/${results.length} 位學生）\n請前往「AI評語待審」工作表審核，確認後將狀態改為「通過」，週日 11:59 系統會自動發送給家長。`);
       return {
         success: true,
         message: `已產生 ${successCount}/${results.length} 位學生的 AI 分析`,
