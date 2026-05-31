@@ -979,6 +979,22 @@ app.get('/api/trigger/grade-send-reports', async (req, res) => {
     res.status(500).json({ success: false, error: e.message });
   }
 });
+// 預覽已審核通過的 AI 評語與年級週報
+app.get('/api/debug/approved-preview', async (req, res) => {
+  try {
+    if (!homeworkService.sheets) await homeworkService.init();
+    const [aiRes, gradeRes] = await Promise.all([
+      homeworkService.sheets.spreadsheets.values.get({ spreadsheetId: homeworkService.spreadsheetId, range: 'AI評語待審!A2:H' }),
+      homeworkService.sheets.spreadsheets.values.get({ spreadsheetId: homeworkService.spreadsheetId, range: '年級週報待審!A2:H' }),
+    ]);
+    const aiApproved = (aiRes.data.values || []).filter(r => r[5] === '通過').map(r => ({ period: r[0], student: r[1], finalText: r[4] || r[2] }));
+    const gradeApproved = (gradeRes.data.values || []).filter(r => r[5] === '通過').map(r => ({ period: r[0], grade: r[1], finalText: r[4] }));
+    res.json({ aiApproved, gradeApproved });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // 學期升級 GET trigger（排程任務用）
 app.get('/api/trigger/increment-grade', async (req, res) => {
   try {
