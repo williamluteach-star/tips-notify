@@ -288,6 +288,9 @@ class NotificationService {
       const gradeMap = {};
       allStudents.forEach(s => { if (s.grade) gradeMap[s.studentName] = String(s.grade); });
 
+      // 不納入年級週報的學生（無每日記錄者）
+      const GRADE_REPORT_EXCLUDE = ['張宇婷', '張恆軒', '董洧彤'];
+
       // 年級週報：7~8月停辦，9月起加入9年級，其餘月份只產出 7、8 年級
       const currentMonth = moment().utcOffset('+08:00').month() + 1; // 1~12
       if (currentMonth === 7 || currentMonth === 8) {
@@ -300,8 +303,8 @@ class NotificationService {
       const results  = [];
 
       for (const grade of grades) {
-        const studentsInGrade = allStudents.filter(s => String(s.grade) === grade);
-        const gradeRecords = records.filter(r => gradeMap[r.學生姓名] === grade);
+        const studentsInGrade = allStudents.filter(s => String(s.grade) === grade && !GRADE_REPORT_EXCLUDE.includes(s.studentName));
+        const gradeRecords = records.filter(r => gradeMap[r.學生姓名] === grade && !GRADE_REPORT_EXCLUDE.includes(r.學生姓名));
 
         const byStudent = {};
         gradeRecords.forEach(r => {
