@@ -172,13 +172,33 @@ async function handleFollow(event) {
     return;
   }
 
-  // 記錄加好友事件（取得 User ID）
   const userId = event.source.userId;
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('📱 新家長加好友！');
-  console.log(`   User ID: ${userId}`);
-  console.log('   請將此 User ID 填入「學生資料表」的「家長LINE ID」欄位');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  const timestamp = require('moment')().utcOffset('+08:00').format('YYYY-MM-DD HH:mm:ss');
+  console.log('📱 新家長加好友！User ID:', userId);
+
+  // 持久化到 Google Sheets「LINE新家長」工作表（不受部署重置影響）
+  try {
+    if (!homeworkService.sheets) await homeworkService.init();
+    if (homeworkService.sheets) {
+      await homeworkService._ensureSheet('LINE新家長', ['User ID', '加好友時間', '來源', '配對狀態']);
+      const existing = await homeworkService.sheets.spreadsheets.values.get({
+        spreadsheetId: homeworkService.spreadsheetId,
+        range: 'LINE新家長!A2:A',
+      });
+      const existingIds = (existing.data.values || []).map(r => r[0]);
+      if (!existingIds.includes(userId)) {
+        await homeworkService.sheets.spreadsheets.values.append({
+          spreadsheetId: homeworkService.spreadsheetId,
+          range: 'LINE新家長!A2',
+          valueInputOption: 'RAW',
+          resource: { values: [[userId, timestamp, 'follow事件', '未配對']] },
+        });
+        console.log('[handleFollow] ✅ 已儲存到 Google Sheets:', userId);
+      }
+    }
+  } catch (e) {
+    console.warn('[handleFollow] Google Sheets 儲存失敗:', e.message);
+  }
 
   await client.replyMessage(event.replyToken, {
     type: 'text',
@@ -607,9 +627,32 @@ app.get('/api/pending-userids', async (req, res) => {
     try { pairs = JSON.parse(fs.readFileSync(pairsFile, 'utf-8')); } catch (e) {}
   }
 
-  // 2. 從 webhook-events.log 取得所有出現過的 User ID
+  // 2a. 從 Google Sheets「LINE新家長」讀取持久化的 follow 事件（不受部署重置影響）
+  try {
+    if (!homeworkService.sheets) await homeworkService.init();
+    if (homeworkService.sheets) {
+      const sheetRes = await homeworkService.sheets.spreadsheets.values.get({
+        spreadsheetId: homeworkService.spreadsheetId,
+        range: 'LINE新家長!A2:D',
+      }).catch(() => ({ data: { values: [] } }));
+      for (const row of (sheetRes.data.values || [])) {
+        const uid = row[0];
+        if (uid && !logUserIds.has(uid)) {
+          logUserIds.set(uid, {
+            userId: uid,
+            lastSeen: row[1] || '',
+            lastAction: '家長加好友',
+            lastMessage: '',
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[pending-userids] 無法讀取 LINE新家長 工作表:', e.message);
+  }
+
+  // 2b. 從 webhook-events.log 取得所有出現過的 User ID
   const logFile = path.join(__dirname, 'webhook-events.log');
-  const logUserIds = new Map(); // userId -> 最新事件資訊
   if (fs.existsSync(logFile)) {
     const lines = fs.readFileSync(logFile, 'utf-8').trim().split('\n');
     for (const line of lines) {
