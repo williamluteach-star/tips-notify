@@ -230,24 +230,26 @@ class NotificationService {
 
     try {
       const activeGrades = getActiveGrades();
+      const normName = n => (n || '').replace(/\s+/g, ' ').trim();
       const allStudents = await homeworkService.getAllStudents();
       const gradeMap = {};
-      allStudents.forEach(s => { if (s.grade) gradeMap[s.studentName] = String(s.grade); });
+      allStudents.forEach(s => { if (s.grade) gradeMap[normName(s.studentName)] = String(s.grade); });
 
       const allRecords = await homeworkService.getHomeworkByDateRange(startDate, endDate);
-      // 只保留本月應發送年級的學生記錄
-      const records = allRecords.filter(r => activeGrades.includes(gradeMap[r.學生姓名]));
+      // 只保留本月應發送年級的學生記錄（正規化姓名做比對）
+      const records = allRecords.filter(r => activeGrades.includes(gradeMap[normName(r.學生姓名)]));
 
       if (records.length === 0) {
         console.log(`[週摘要] ${startDate} ~ ${endDate} 無學習記錄（本月有效年級：${activeGrades.join('、')}）`);
         return { success: true, message: '此區間無學習記錄', sent: 0 };
       }
 
-      // 依學生分組（本期記錄）
+      // 依學生分組（正規化姓名：去頭尾空白、合併多重空白）
       const grouped = {};
       records.forEach(r => {
-        if (!grouped[r.學生姓名]) grouped[r.學生姓名] = [];
-        grouped[r.學生姓名].push(r);
+        const key = normName(r.學生姓名);
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(r);
       });
 
       const startFmt = moment(startDate).format('MM/DD');

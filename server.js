@@ -892,9 +892,12 @@ app.get('/api/trigger/weekly-summary', async (req, res) => {
     } else {
       return res.status(400).json({ error: `今天是週${['日','一','二','三','四','五','六'][dow]}，請帶 ?period=thu 或 ?period=sat 參數` });
     }
-    console.log(`[trigger/weekly-summary] 發送 ${startDate} ~ ${endDate}`);
-    const result = await notificationService.sendWeeklySummary(startDate, endDate);
-    res.json(result);
+    console.log(`[trigger/weekly-summary] 開始發送 ${startDate} ~ ${endDate}`);
+    // 立刻回應，背景執行，避免 cron-job.org 30 秒 timeout 造成重複發送
+    res.json({ success: true, message: '週摘要發送已啟動（背景執行中）', startDate, endDate });
+    notificationService.sendWeeklySummary(startDate, endDate)
+      .then(r => console.log(`[trigger/weekly-summary] 完成：`, JSON.stringify(r)))
+      .catch(e => console.error(`[trigger/weekly-summary] 錯誤：`, e.message));
   } catch (e) {
     console.error('[trigger/weekly-summary]', e.message);
     res.status(500).json({ success: false, error: e.message });
