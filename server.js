@@ -627,6 +627,9 @@ app.get('/api/pending-userids', async (req, res) => {
     try { pairs = JSON.parse(fs.readFileSync(pairsFile, 'utf-8')); } catch (e) {}
   }
 
+  // User ID 收集 Map（去重）
+  const logUserIds = new Map();
+
   // 2a. 從 Google Sheets「LINE新家長」讀取持久化的 follow 事件（不受部署重置影響）
   try {
     if (!homeworkService.sheets) await homeworkService.init();
