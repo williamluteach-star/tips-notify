@@ -951,15 +951,18 @@ app.get('/api/trigger/weekly-summary', async (req, res) => {
 });
 
 // 班級週報：每週日送本週一~六（isoWeekday 確保週日也能正確抓本週）
+// 立刻回應，背景非同步執行（避免 cron-job.org 30 秒 timeout 造成重複發送）
 app.get('/api/trigger/class-weekly-summary', async (req, res) => {
   try {
     const moment = require('moment');
     const now = moment().utcOffset('+08:00');
     const startDate = now.clone().isoWeekday(1).format('YYYY-MM-DD');
     const endDate   = now.clone().isoWeekday(6).format('YYYY-MM-DD');
-    console.log(`[trigger/class-weekly-summary] 發送 ${startDate} ~ ${endDate}`);
-    const result = await notificationService.sendClassWeeklySummary(startDate, endDate);
-    res.json(result);
+    console.log(`[trigger/class-weekly-summary] 開始發送 ${startDate} ~ ${endDate}`);
+    res.json({ success: true, message: '班級週報發送已啟動（背景執行中）', startDate, endDate });
+    notificationService.sendClassWeeklySummary(startDate, endDate)
+      .then(r => console.log(`[trigger/class-weekly-summary] 完成：`, JSON.stringify(r)))
+      .catch(e => console.error(`[trigger/class-weekly-summary] 錯誤：`, e.message));
   } catch (e) {
     console.error('[trigger/class-weekly-summary]', e.message);
     res.status(500).json({ success: false, error: e.message });
@@ -998,15 +1001,18 @@ app.get('/api/trigger/grade-generate-reports', async (req, res) => {
 });
 
 // AI 個人評語發送：週日 11:59（isoWeekday 確保週日也能正確抓本週）
+// 立刻回應 202，背景非同步執行（避免 cron-job.org 30 秒 timeout 造成重複發送）
 app.get('/api/trigger/ai-weekly-analysis', async (req, res) => {
   try {
     const moment = require('moment');
     const now = moment().utcOffset('+08:00');
     const startDate = now.clone().isoWeekday(1).format('YYYY-MM-DD');
     const endDate   = now.clone().isoWeekday(5).format('YYYY-MM-DD');
-    console.log(`[trigger/ai-weekly-analysis] 發送 ${startDate} ~ ${endDate}`);
-    const result = await notificationService.sendAIWeeklyAnalysis(startDate, endDate);
-    res.json(result);
+    console.log(`[trigger/ai-weekly-analysis] 開始發送 ${startDate} ~ ${endDate}`);
+    res.json({ success: true, message: 'AI評語發送已啟動（背景執行中）', startDate, endDate });
+    notificationService.sendAIWeeklyAnalysis(startDate, endDate)
+      .then(r => console.log(`[trigger/ai-weekly-analysis] 完成：`, JSON.stringify(r)))
+      .catch(e => console.error(`[trigger/ai-weekly-analysis] 錯誤：`, e.message));
   } catch (e) {
     console.error('[trigger/ai-weekly-analysis]', e.message);
     res.status(500).json({ success: false, error: e.message });
@@ -1014,15 +1020,18 @@ app.get('/api/trigger/ai-weekly-analysis', async (req, res) => {
 });
 
 // 年級週報發送：週日 12:00（isoWeekday 確保週日也能正確抓本週）
+// 立刻回應，背景非同步執行（避免 cron-job.org 30 秒 timeout 造成重複發送）
 app.get('/api/trigger/grade-send-reports', async (req, res) => {
   try {
     const moment = require('moment');
     const now = moment().utcOffset('+08:00');
     const startDate = now.clone().isoWeekday(1).format('YYYY-MM-DD');
     const endDate   = now.clone().isoWeekday(5).format('YYYY-MM-DD');
-    console.log(`[trigger/grade-send-reports] 發送 ${startDate} ~ ${endDate}`);
-    const result = await notificationService.sendSavedGradeReports(startDate, endDate);
-    res.json(result);
+    console.log(`[trigger/grade-send-reports] 開始發送 ${startDate} ~ ${endDate}`);
+    res.json({ success: true, message: '年級週報發送已啟動（背景執行中）', startDate, endDate });
+    notificationService.sendSavedGradeReports(startDate, endDate)
+      .then(r => console.log(`[trigger/grade-send-reports] 完成：`, JSON.stringify(r)))
+      .catch(e => console.error(`[trigger/grade-send-reports] 錯誤：`, e.message));
   } catch (e) {
     console.error('[trigger/grade-send-reports]', e.message);
     res.status(500).json({ success: false, error: e.message });
