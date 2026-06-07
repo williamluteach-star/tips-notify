@@ -1155,53 +1155,10 @@ app.get('/api/debug/line-status', async (req, res) => {
   }
 });
 
-// ── Server-side 排程（純 JS，不需外部套件，台灣時區）──────────────────────
-// 取得台灣當下時間（moment 已安裝）
-function getTaipeiNow() {
-  return require('moment')().utcOffset('+08:00');
-}
-
-// 防止同一分鐘重複發送的記錄
-const _cronFired = {};
-
-// 每分鐘檢查是否到了預定發送時間
-setInterval(async () => {
-  const now = getTaipeiNow();
-  const dow  = now.day();   // 0=日,1=一,...,6=六
-  const h    = now.hours();
-  const m    = now.minutes();
-  const key  = `${now.format('YYYY-MM-DD')}-${h}-${m}`;
-
-  // 週四 10:00 → 發送週一~三作業週摘要
-  if (dow === 4 && h === 10 && m === 0 && !_cronFired[key + '-thu']) {
-    _cronFired[key + '-thu'] = true;
-    const startDate = now.clone().day(1).format('YYYY-MM-DD');
-    const endDate   = now.clone().day(3).format('YYYY-MM-DD');
-    console.log(`[排程/週四10:00] 發送 ${startDate} ~ ${endDate} 作業週摘要`);
-    try {
-      const result = await notificationService.sendWeeklySummary(startDate, endDate);
-      console.log('[排程/週四] 完成：', JSON.stringify(result));
-    } catch (e) {
-      console.error('[排程/週四] 錯誤：', e.message);
-    }
-  }
-
-  // 週六 18:08 → 發送週四~六作業週摘要
-  if (dow === 6 && h === 18 && m === 8 && !_cronFired[key + '-sat']) {
-    _cronFired[key + '-sat'] = true;
-    const startDate = now.clone().day(4).format('YYYY-MM-DD');
-    const endDate   = now.clone().day(6).format('YYYY-MM-DD');
-    console.log(`[排程/週六18:08] 發送 ${startDate} ~ ${endDate} 作業週摘要`);
-    try {
-      const result = await notificationService.sendWeeklySummary(startDate, endDate);
-      console.log('[排程/週六] 完成：', JSON.stringify(result));
-    } catch (e) {
-      console.error('[排程/週六] 錯誤：', e.message);
-    }
-  }
-}, 60 * 1000); // 每分鐘檢查
-
-console.log('✅ 排程已啟動：週四10:00、週六18:08（台灣時區，server-side）');
+// ── 排程由 cron-job.org 外部觸發，不在此處重複設定 ──────────────────────────
+// 週四10:00 → /api/trigger/weekly-summary（cron-job.org）
+// 週六18:08 → /api/trigger/weekly-summary（cron-job.org）
+// 移除 server-side setInterval，避免與 cron-job.org 同時觸發造成重複發送
 // ─────────────────────────────────────────────────────────────────────────────
 
 // 啟動伺服器
