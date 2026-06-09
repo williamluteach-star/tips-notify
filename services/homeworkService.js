@@ -909,6 +909,37 @@ class HomeworkService {
   }
 
   /**
+   * 標記單一學生的 AI 評語為已發送 → 寫入 F 欄（狀態）
+   */
+  async markAIAnalysisSentOne(period, studentName) {
+    if (!this.sheets) await this.init();
+    if (!this.sheets) return null;
+
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'AI評語待審!A2:H',
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row[0] === period && row[1] === studentName);
+      if (rowIndex === -1) return null;
+
+      const sheetRow = rowIndex + 2;
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `AI評語待審!F${sheetRow}`,
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: [['已發送']] },
+      });
+      return { updated: 1 };
+    } catch (error) {
+      console.error('標記單筆已發送錯誤:', error.message);
+      return null;
+    }
+  }
+
+  /**
    * 讀取「成績記錄」工作表中指定學生的月考成績
    *
    * 支援兩列 header 格式：

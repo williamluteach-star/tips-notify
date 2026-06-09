@@ -714,12 +714,14 @@ class NotificationService {
 
       const period = `${startDate}~${endDate}`;
       const allAnalyses = await homeworkService.getAIAnalyses(period);
-      // 只發送本月應發送年級的學生
-      const analyses = allAnalyses.filter(a => activeGrades.includes(gradeMap[a.studentName]));
+      // 只發送狀態為「通過」且本月應發送年級的學生
+      const analyses = allAnalyses.filter(a =>
+        a.status === '通過' && activeGrades.includes(gradeMap[a.studentName])
+      );
 
       if (analyses.length === 0) {
-        console.log(`[AI發送] ${period} 無待審 AI 評語（本月有效年級：${activeGrades.join('、')}）`);
-        return { success: true, message: '無待發送的 AI 評語', sent: 0 };
+        console.log(`[AI發送] ${period} 無已通過審核的 AI 評語（本月有效年級：${activeGrades.join('、')}）`);
+        return { success: true, message: '無待發送的 AI 評語（未有狀態為「通過」的評語）', sent: 0 };
       }
 
       const startFmt = moment(startDate).format('MM/DD');
@@ -727,8 +729,6 @@ class NotificationService {
       const results  = [];
 
       for (const analysis of analyses) {
-        if (analysis.status === '已發送') continue;
-
         const { studentName, finalText } = analysis;
 
         let lineUserIds = this.getParentLineUserIds(studentName);
@@ -739,6 +739,7 @@ class NotificationService {
           }
         }
         if (lineUserIds.length === 0) {
+          console.warn(`[AI發送] ⚠️ 找不到 ${studentName} 的 LINE ID，跳過（狀態不變）`);
           results.push({ studentName, success: false, message: '找不到LINE ID' });
           continue;
         }
@@ -747,20 +748,24 @@ class NotificationService {
         const displayName = extractGivenName(studentName);
         const msg = `🤖【${startFmt}～${endFmt} AI 老師本週觀察】\n\n${displayName}\n\n${finalText}\n\n${randomFrom(STUDENT_ENCOURAGEMENTS)}\n\n感謝您的關注 🙏`;
 
+        let studentSent = false;
         for (const uid of lineUserIds) {
           try {
             await client.pushMessage(uid, { type: 'text', text: msg });
             console.log(`[AI發送] ✅ 已發送給 ${studentName} 的家長（${uid}）`);
             results.push({ studentName, userId: uid, success: true });
+            studentSent = true;
           } catch (e) {
             console.error(`[AI發送] ❌ 發送失敗 ${uid}:`, e.message);
             results.push({ studentName, userId: uid, success: false, error: e.message });
           }
         }
-      }
 
-      // 標記全部已發送
-      await homeworkService.markAIAnalysesSent(period);
+        // 只有成功發送才標記為已發送（逐筆標記，避免發送失敗卻被標為已發送）
+        if (studentSent) {
+          await homeworkService.markAIAnalysisSentOne(period, studentName);
+        }
+      }
 
       const successCount = results.filter(r => r.success).length;
       return {
