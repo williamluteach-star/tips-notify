@@ -152,6 +152,46 @@ class NotificationService {
     }
   }
 
+  /**
+   * 發送前檢查 LINE 訊息額度，不足時通知負責人
+   * @param {string} label - 發送功能名稱（用於 log / 通知）
+   * @param {number} estimatedCount - 預計發送則數
+   * @returns {{ sufficient: boolean, remaining: number, limit: number, used: number }}
+   */
+  async checkLineQuota(label, estimatedCount) {
+    if (!client) return { sufficient: true, remaining: 9999, limit: 9999, used: 0 };
+    try {
+      const [quotaRes, usageRes] = await Promise.all([
+        client.getTargetLimitForAdditionalMessages(),
+        client.getNumberOfMessagesSentThisMonth(),
+      ]);
+      const limit     = quotaRes.type === 'unlimited' ? Infinity : (quotaRes.value || 0);
+      const used      = usageRes.totalUsage || 0;
+      const remaining = limit === Infinity ? Infinity : limit - used;
+
+      console.log(`[額度檢查][${label}] 上限：${limit === Infinity ? '無限制' : limit}，已用：${used}，剩餘：${remaining === Infinity ? '無限制' : remaining}，預計本次：${estimatedCount}`);
+
+      if (remaining !== Infinity && remaining < estimatedCount) {
+        const msg = `⚠️ LINE 訊息額度不足，${label} 取消發送\n\n上限：${limit} 則\n已用：${used} 則\n剩餘：${remaining} 則\n本次需要：${estimatedCount} 則\n\n請至 LINE Official Account Manager 升級方案（Light 方案 5,000 則/月）。`;
+        console.error(`[額度檢查][${label}] 額度不足，取消發送`);
+        await this.notifyOwner(msg);
+        return { sufficient: false, remaining, limit, used };
+      }
+
+      // 低額度預警（剩餘 ≤ 100 則）
+      if (remaining !== Infinity && remaining <= 100) {
+        const msg = `⚠️ LINE 訊息額度偏低，請盡快升級方案\n\n上限：${limit} 則\n已用：${used} 則\n剩餘：${remaining} 則\n本次發送後預計剩餘：${remaining - estimatedCount} 則\n\n請至 LINE Official Account Manager 升級方案。`;
+        console.warn(`[額度檢查][${label}] 額度偏低（剩餘 ${remaining} 則）`);
+        await this.notifyOwner(msg);
+      }
+
+      return { sufficient: true, remaining, limit, used };
+    } catch (e) {
+      console.warn(`[額度檢查][${label}] 查詢失敗，跳過檢查：`, e.message);
+      return { sufficient: true, remaining: 9999, limit: 9999, used: 0 };
+    }
+  }
+
   getParentLineUserIds(studentName) {
     const pairsFile = path.join(__dirname, '..', 'parent-pairs.json');
     try {
@@ -251,6 +291,13 @@ class NotificationService {
         if (!grouped[key]) grouped[key] = [];
         grouped[key].push(r);
       });
+
+      // 額度檢查（估計：每位學生平均 2 個 LINE ID）
+      const estimatedMsgs = Object.keys(grouped).length * 2;
+      const quota = await this.checkLineQuota('週摘要', estimatedMsgs);
+      if (!quota.sufficient) {
+        return { success: false, message: `LINE 額度不足（剩餘 ${quota.remaining} 則，預計 ${estimatedMsgs} 則），發送取消`, sent: 0 };
+      }
 
       const startFmt = moment(startDate).format('MM/DD');
       const endFmt   = moment(endDate).format('MM/DD');
@@ -460,6 +507,15 @@ class NotificationService {
       }
 
       const allStudents = await homeworkService.getAllStudents();
+
+      // 額度檢查（每個年級估計 15 位家長）
+      const pendingReports = reports.filter(r => r.status !== '已發送');
+      const estimatedMsgs  = pendingReports.length * 15;
+      const quota = await this.checkLineQuota('年級週報', estimatedMsgs);
+      if (!quota.sufficient) {
+        return { success: false, message: `LINE 額度不足（剩餘 ${quota.remaining} 則，預計 ${estimatedMsgs} 則），發送取消`, sent: 0 };
+      }
+
       const allResults  = [];
 
       for (const report of reports) {
@@ -541,6 +597,13 @@ class NotificationService {
           .map(r => gradeMap[r.學生姓名])
           .filter(g => g && activeGrades.includes(g))
       )].sort();
+
+      // 額度檢查（每個年級估計 1 則 group 訊息）
+      const estimatedMsgs = grades.length;
+      const quota = await this.checkLineQuota('班級週報', estimatedMsgs);
+      if (!quota.sufficient) {
+        return { success: false, message: `LINE 額度不足（剩餘 ${quota.remaining} 則，預計 ${estimatedMsgs} 則），發送取消`, sent: 0 };
+      }
 
       const startFmt = moment(startDate).format('MM/DD');
       const endFmt   = moment(endDate).format('MM/DD');
@@ -722,6 +785,13 @@ class NotificationService {
       if (analyses.length === 0) {
         console.log(`[AI發送] ${period} 無已通過審核的 AI 評語（本月有效年級：${activeGrades.join('、')}）`);
         return { success: true, message: '無待發送的 AI 評語（未有狀態為「通過」的評語）', sent: 0 };
+      }
+
+      // 額度檢查（每位學生估計 2 個 LINE ID）
+      const estimatedMsgs = analyses.length * 2;
+      const quota = await this.checkLineQuota('AI評語', estimatedMsgs);
+      if (!quota.sufficient) {
+        return { success: false, message: `LINE 額度不足（剩餘 ${quota.remaining} 則，預計 ${estimatedMsgs} 則），發送取消`, sent: 0 };
       }
 
       const startFmt = moment(startDate).format('MM/DD');
