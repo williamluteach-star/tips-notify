@@ -700,13 +700,14 @@ class NotificationService {
   async generateAndSaveAIAnalyses(startDate, endDate) {
     try {
       const activeGrades = getActiveGrades();
+      const normName = n => (n || '').replace(/\s+/g, ' ').trim();
       const allStudents = await homeworkService.getAllStudents();
       const gradeMap = {};
-      allStudents.forEach(s => { if (s.grade) gradeMap[s.studentName] = String(s.grade); });
+      allStudents.forEach(s => { if (s.grade) gradeMap[normName(s.studentName)] = String(s.grade); });
 
       const allRecords = await homeworkService.getHomeworkByDateRange(startDate, endDate);
-      // 只保留本月應發送年級的學生記錄
-      const records = allRecords.filter(r => activeGrades.includes(gradeMap[r.學生姓名]));
+      // 只保留本月應發送年級的學生記錄（用 normName 正規化空格再查 gradeMap）
+      const records = allRecords.filter(r => activeGrades.includes(gradeMap[normName(r.學生姓名)]));
       const period = `${startDate}~${endDate}`;
 
       if (records.length === 0) {
@@ -714,11 +715,12 @@ class NotificationService {
         return { success: true, message: '此區間無學習記錄', generated: 0 };
       }
 
-      // 依學生分組
+      // 依學生分組（以正規化後的姓名為 key，避免雙空格造成分組錯誤）
       const grouped = {};
       records.forEach(r => {
-        if (!grouped[r.學生姓名]) grouped[r.學生姓名] = [];
-        grouped[r.學生姓名].push(r);
+        const key = normName(r.學生姓名);
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(r);
       });
 
       const results = [];
