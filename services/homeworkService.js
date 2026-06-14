@@ -581,16 +581,15 @@ class HomeworkService {
 
       return (response.data.values || [])
         .filter(row => {
-          if (!row[0]) return false;
-          const d = moment(row[0], [
+          // 優先用「完成時間」（D欄, row[3]）判斷日期，
+          // 因為家長可能事後補登，提交時間（A欄）會超出週期範圍
+          const dateRaw = row[3] || row[0] || '';
+          if (!dateRaw) return false;
+          const d = moment(dateRaw, [
             'YYYY-MM-DD HH:mm:ss',
+            'YYYY-MM-DD HH:mm',
             'YYYY/MM/DD HH:mm:ss',
-            'YYYY/M/D HH:mm:ss',
-            'YYYY-M-D HH:mm:ss',
-            'YYYY/MM/DD H:mm:ss',
-            'YYYY/M/D H:mm:ss',
-            'M/D/YYYY HH:mm:ss',
-            'M/D/YYYY H:mm:ss',
+            'YYYY/MM/DD HH:mm',
           ]);
           return d.isValid() && d.isBetween(start, end, null, '[]');
         })
