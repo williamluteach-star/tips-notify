@@ -737,7 +737,8 @@ class NotificationService {
         // 讀取月考成績（若有「成績記錄」工作表）
         const scoresSummary = await homeworkService.getStudentScores(studentName).catch(() => '');
 
-        const aiResult = await aiService.analyzeStudentProgress(studentName, weekRecords, leaveSummary, scoresSummary);
+        const studentGrade = gradeMap[studentName] || null; // studentName 已是 normName 後的 key
+        const aiResult = await aiService.analyzeStudentProgress(studentName, weekRecords, leaveSummary, scoresSummary, studentGrade);
         if (!aiResult) {
           console.warn(`[AI產生] ${studentName} AI 分析失敗`);
           results.push({ studentName, success: false });
