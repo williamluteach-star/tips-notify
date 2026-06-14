@@ -582,7 +582,16 @@ class HomeworkService {
       return (response.data.values || [])
         .filter(row => {
           if (!row[0]) return false;
-          const d = moment(row[0], ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss'], true);
+          const d = moment(row[0], [
+            'YYYY-MM-DD HH:mm:ss',
+            'YYYY/MM/DD HH:mm:ss',
+            'YYYY/M/D HH:mm:ss',
+            'YYYY-M-D HH:mm:ss',
+            'YYYY/MM/DD H:mm:ss',
+            'YYYY/M/D H:mm:ss',
+            'M/D/YYYY HH:mm:ss',
+            'M/D/YYYY H:mm:ss',
+          ]);
           return d.isValid() && d.isBetween(start, end, null, '[]');
         })
         .map(row => ({
