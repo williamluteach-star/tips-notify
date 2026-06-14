@@ -579,7 +579,12 @@ class HomeworkService {
         range: '作業記錄表!A2:G',
       });
 
-      return (response.data.values || [])
+      const allRows = response.data.values || [];
+      console.log(`[DEBUG getHomeworkByDateRange] 讀取到 ${allRows.length} 筆原始資料，篩選範圍：${start.format('YYYY-MM-DD')} ~ ${end.format('YYYY-MM-DD')}`);
+      allRows.slice(0, 5).forEach((row, i) => {
+        console.log(`[DEBUG] 第${i+1}筆 A欄(時間戳記)="${row[0]}" B欄(學生)="${row[1]}" C欄(項目)="${row[2]}" D欄(完成時間)="${row[3]}"`);
+      });
+      return allRows
         .filter(row => {
           // 優先用「完成時間」（D欄, row[3]）判斷日期，
           // 因為家長可能事後補登，提交時間（A欄）會超出週期範圍
@@ -591,7 +596,9 @@ class HomeworkService {
             'YYYY/MM/DD HH:mm:ss',
             'YYYY/MM/DD HH:mm',
           ]);
-          return d.isValid() && d.isBetween(start, end, null, '[]');
+          const passes = d.isValid() && d.isBetween(start, end, null, '[]');
+          if (!passes && row[1]) console.log(`[DEBUG] 過濾掉：學生="${row[1]}" dateRaw="${dateRaw}" parsed="${d.isValid() ? d.format('YYYY-MM-DD') : '無效'}"`);
+          return passes;
         })
         .map(row => ({
           時間戳記: row[0],
