@@ -148,17 +148,20 @@ ${recordSummary || '  本週無任何記錄'}
 
     const chineseName = studentName.replace(/[^一-鿿]/g, '').trim() || studentName;
 
+    const DAY_NAMES = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
     const byDate = {};
     weekRecords.forEach(r => {
       const raw = r.時間戳記 || r.完成時間 || '';
-      const date = moment(raw, ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss']).format('MM/DD');
-      if (!byDate[date]) byDate[date] = [];
-      byDate[date].push(r.作業項目);
+      const m = moment(raw, ['YYYY-MM-DD HH:mm:ss', 'YYYY/MM/DD HH:mm:ss']);
+      const date = m.format('MM/DD');
+      const dayName = DAY_NAMES[m.day()];
+      if (!byDate[date]) byDate[date] = { dayName, items: [] };
+      byDate[date].items.push(r.作業項目);
     });
     const activeDays = Object.keys(byDate).length;
     const totalItems = weekRecords.length;
     const recordSummary = Object.entries(byDate)
-      .map(([date, items]) => `  ${date}：${items.join('、')}`)
+      .map(([date, { dayName, items }]) => `  ${date}（${dayName}）：${items.join('、')}`)
       .join('\n');
 
     // 期末考倒數（距 6/25 在 35 天內才提醒）
