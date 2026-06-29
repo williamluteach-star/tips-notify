@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', initRandomCircleLayout);
 // =========================================
 // 老師登入 (sessionStorage 點名機制)
 // =========================================
-var TEACHERS = ['Doris', 'Peggy', '姿莉', 'Anita', 'Phoebe', '太陽', '米漿', '小熊', 'Henry', '郁涵'];
+var TEACHERS = ['姿莉', 'Anita', 'Phoebe', '米漿', '小熊', 'Henry'];
 var DIRECTOR_NAME = '主任';
 
 function getCurrentTeacher() {
