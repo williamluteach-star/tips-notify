@@ -1180,6 +1180,25 @@ app.get('/api/debug/line-status', async (req, res) => {
 
 // 啟動伺服器
 const PORT = process.env.PORT || 3000;
+// ===== 部落格更新：每週六群發新文章給所有 LINE 好友（cron-job.org 觸發）=====
+app.get('/api/trigger/blog-update', async (req, res) => {
+  if (req.query.key !== 'tipsblog2026') return res.status(403).json({ error: 'forbidden' });
+  try {
+    const r = await fetch('https://www.tips-edu.com/blog/feed.xml');
+    const xml = await r.text();
+    const m = xml.match(/<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<link>([\s\S]*?)<\/link>/);
+    const title = m ? m[1].trim() : '本週新文章';
+    const link  = m ? m[2].trim() : 'https://www.tips-edu.com/blog/';
+    const text = `📚 TIPS 英典教育｜本週新文章上線！\n\n${title}\n👉 ${link}\n\n陪孩子做對的學習選擇 🌱`;
+    const lr = await fetch('https://api.line.me/v2/bot/message/broadcast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.LINE_CHANNEL_ACCESS_TOKEN },
+      body: JSON.stringify({ messages: [{ type: 'text', text }] })
+    });
+    const body = await lr.text();
+    res.status(lr.ok ? 200 : 500).json({ ok: lr.ok, title, link, lineStatus: lr.status, lineBody: body });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
 app.listen(PORT, () => {
   console.log('========================================');
   console.log('   作業完成通知系統');
