@@ -1180,39 +1180,40 @@ app.get('/api/debug/line-status', async (req, res) => {
 
 // 啟動伺服器
 const PORT = process.env.PORT || 3000;
-// ===== 部落格更新：每週六群發「封面圖＋文字」給所有 LINE 好友 =====
+// ===== 部落格更新：週六群發「封面圖＋本週文章＋上篇複習」=====
 app.get('/api/trigger/blog-update', async (req, res) => {
   if (req.query.key !== 'tipsblog2026') return res.status(403).json({ error: 'forbidden' });
   try {
     const r = await fetch('https://www.tips-edu.com/blog/feed.xml');
     const xml = await r.text();
-    const m = xml.match(/<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<link>([\s\S]*?)<\/link>[\s\S]*?<description>([\s\S]*?)<\/description>/);
-    const title = m ? m[1].trim() : '本週新文章';
-    const link  = m ? m[2].trim() : 'https://www.tips-edu.com/blog/';
-    const desc  = m ? m[3].trim() : '';
-    const slug  = link.split('/').pop().replace('.html', '');
+    const re = /<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<link>([\s\S]*?)<\/link>[\s\S]*?<description>([\s\S]*?)<\/description>[\s\S]*?<\/item>/g;
+    const items = []; let m;
+    while ((m = re.exec(xml)) && items.length < 2) items.push({ title: m[1].trim(), link: m[2].trim(), desc: m[3].trim() });
+    const a = items[0] || { title: '本週新文章', link: 'https://www.tips-edu.com/blog/', desc: '' };
+    const slug = a.link.split('/').pop().replace('.html', '');
     const cover = `https://www.tips-edu.com/blog/covers/${slug}.png`;
     const text =
 `📚 TIPS 英典教育｜本週新文章上線！
 
-${title}
+${a.title}
 
-${desc}
+${a.desc}
 
 👇 點擊閱讀完整文章
-${link}
+${a.link}
 
 💬 看完若有任何課業或選校疑問，歡迎直接私訊我們聊聊！`;
     const messages = [];
     try { const hc = await fetch(cover, { method: 'HEAD' }); if (hc.ok) messages.push({ type: 'image', originalContentUrl: cover, previewImageUrl: cover }); } catch (e) {}
     messages.push({ type: 'text', text });
+    if (items[1]) messages.push({ type: 'text', text: `📖 上一篇也推薦給您：\n\n${items[1].title}\n👉 ${items[1].link}` });
     const lr = await fetch('https://api.line.me/v2/bot/message/broadcast', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.LINE_CHANNEL_ACCESS_TOKEN },
       body: JSON.stringify({ messages })
     });
     const body = await lr.text();
-    res.status(lr.ok ? 200 : 500).json({ ok: lr.ok, title, link, cover, sentImage: messages.some(x => x.type === 'image'), lineStatus: lr.status, lineBody: body });
+    res.status(lr.ok ? 200 : 500).json({ ok: lr.ok, latest: a.title, previous: items[1] ? items[1].title : null, msgs: messages.length, lineStatus: lr.status, lineBody: body });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 app.listen(PORT, () => {
