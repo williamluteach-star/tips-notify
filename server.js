@@ -37,7 +37,15 @@ app.use('/api', express.json());
 
 // 靜態檔案服務（Web管理介面）
 // extensions: ['html'] 讓 /parent-upload 可以不加 .html 直接存取
-app.use(express.static('public', { extensions: ['html'] }));
+app.use(express.static('public', {
+  extensions: ['html'],
+  setHeaders: (res, filePath) => {
+    // js/html/css 一律要求瀏覽器向伺服器重新驗證，避免改版後仍顯示舊快取
+    if (/\.(js|html|css)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  }
+}));
 
 // 引入模組
 const homeworkService = require('./services/homeworkService');
