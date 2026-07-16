@@ -208,7 +208,7 @@ async function handleFollow(event) {
     console.warn('[handleFollow] Google Sheets 儲存失敗:', e.message);
   }
 
-  await client.replyMessage(event.replyToken, {
+if (false)   await client.replyMessage(event.replyToken, {
     type: 'text',
     text: '歡迎！您將收到孩子作業完成的相關通知。如需查詢記錄，請輸入「查詢」。',
   });
