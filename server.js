@@ -56,6 +56,16 @@ const { logEvent } = require('./scripts/log-webhook-events');
 app.post('/webhook', async (req, res) => {
   const events = req.body.events;
 
+  // 轉發事件給 TIPS 學習歷程平台（fire-and-forget，不影響本系統回覆）
+  try {
+    const PORTFOLIO_WEBHOOK_URL = process.env.PORTFOLIO_WEBHOOK_URL ||
+      'https://script.google.com/macros/s/AKfycbyQBIQCqtfJL0SjwBlwAsFKfHzIaAUWk5hAZ5w_hOEd65pDpcOqpNsYjAbv5NfRwExA/exec';
+    if (typeof fetch === 'function') {
+      fetch(PORTFOLIO_WEBHOOK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req.body) })
+        .catch(function (err) { console.error('轉發學習歷程平台失敗:', err.message); });
+    }
+  } catch (err) { console.error('轉發學習歷程平台失敗:', err.message); }
+
   for (const event of events) {
     // ✅ 每個事件都先寫入 log（確保 User ID 被記錄）
     logEvent(event);
